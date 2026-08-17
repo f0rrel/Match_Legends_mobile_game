@@ -1,0 +1,17 @@
+node_modules/
+.DS_Store
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/capacitor-cordova-android-plugins/build/
+
+# IDE
+.idea/
+*.iml
+
+# Local environment
+.env
+.env.*
+!.env.example

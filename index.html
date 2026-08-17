@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Match Legends</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#150E27;
+    --void-2:#1D1438;
+    --panel:#26183F;
+    --panel-2:#31204E;
+    --gold:#E7B84B;
+    --gold-bright:#F7D77A;
+    --crimson:#C1443B;
+    --crimson-bright:#E15B4F;
+    --emerald:#34A37F;
+    --parchment:#F3E9D2;
+    --parchment-dim:#B7ACC4;
+    --shadow:rgba(6,3,16,0.55);
+    --radius:16px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    min-height:100%;
+    background:
+      radial-gradient(circle at 50% -10%, #3A2560 0%, transparent 55%),
+      linear-gradient(180deg, var(--void) 0%, var(--void-2) 100%);
+    color:var(--parchment);
+    font-family:'Inter', system-ui, sans-serif;
+    display:flex;
+    justify-content:center;
+    overflow-x:hidden;
+  }
+  #app{
+    width:100%;
+    max-width:480px;
+    min-height:100vh;
+    min-height:100dvh;
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+  h1,h2,h3,.display{font-family:'Cinzel', serif; letter-spacing:0.02em;}
+  button{font-family:inherit; border:none; cursor:pointer; color:inherit;}
+  button:focus-visible, [tabindex]:focus-visible{outline:2px solid var(--gold-bright); outline-offset:2px;}
+  .screen{display:none; flex-direction:column; flex:1; padding:18px 16px 28px;}
+  .screen.active{display:flex;}
+  .hairline{height:1px; background:linear-gradient(90deg, transparent, rgba(231,184,75,0.35), transparent); border:none; margin:14px 0;}
+
+  /* ---------- Top bar ---------- */
+  .topbar{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  .backbtn{
+    width:38px; height:38px; border-radius:50%;
+    background:var(--panel); color:var(--parchment);
+    font-size:18px; display:flex; align-items:center; justify-content:center;
+    border:1px solid rgba(231,184,75,0.25);
+  }
+  .gemcount{
+    display:flex; align-items:center; gap:6px;
+    background:var(--panel); border:1px solid rgba(231,184,75,0.3);
+    padding:7px 12px; border-radius:999px; font-weight:700; font-size:14px;
+  }
+  .screen-title{font-size:15px; text-transform:uppercase; letter-spacing:0.12em; color:var(--parchment-dim); font-weight:700;}
+
+  /* ---------- Home ---------- */
+  .home-hero{text-align:center; margin:18px 0 8px;}
+  .home-hero .crest{font-size:52px; filter:drop-shadow(0 6px 14px rgba(231,184,75,0.35));}
+  .home-hero h1{font-size:34px; margin:8px 0 2px; color:var(--gold-bright); text-shadow:0 2px 12px rgba(231,184,75,0.35);}
+  .home-hero p{margin:0; color:var(--parchment-dim); font-size:13px; letter-spacing:0.05em; text-transform:uppercase;}
+
+  .avatar-strip{
+    display:flex; align-items:center; gap:12px;
+    background:var(--panel); border:1px solid rgba(231,184,75,0.25);
+    border-radius:var(--radius); padding:12px 14px; margin:18px 0 10px;
+  }
+  .avatar-strip .icon{
+    width:52px; height:52px; border-radius:50%; font-size:26px;
+    background:radial-gradient(circle at 35% 30%, var(--panel-2), var(--void));
+    border:2px solid var(--gold); display:flex; align-items:center; justify-content:center;
+  }
+  .avatar-strip .info{flex:1;}
+  .avatar-strip .info .label{font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:var(--parchment-dim);}
+  .avatar-strip .info .name{font-family:'Cinzel',serif; font-weight:700; font-size:16px; color:var(--gold-bright);}
+  .avatar-strip .change{font-size:12px; font-weight:700; color:var(--gold); background:rgba(231,184,75,0.12); padding:8px 12px; border-radius:999px; border:1px solid rgba(231,184,75,0.4);}
+
+  .menu-btn{
+    display:flex; align-items:center; gap:14px;
+    padding:18px 18px; border-radius:var(--radius); margin-bottom:12px;
+    text-align:left; font-size:17px; font-weight:700; font-family:'Cinzel',serif;
+    box-shadow:0 8px 20px var(--shadow);
+  }
+  .menu-btn .emo{font-size:26px;}
+  .menu-btn small{display:block; font-family:'Inter',sans-serif; font-weight:500; font-size:12px; opacity:0.85; margin-top:2px; letter-spacing:0.01em;}
+  .menu-btn.primary{background:linear-gradient(160deg, var(--gold-bright), var(--gold)); color:#2A1B08;}
+  .menu-btn.secondary{background:linear-gradient(160deg, var(--crimson-bright), var(--crimson)); color:#2B0C09;}
+
+  /* ---------- Avatar select ---------- */
+  .avatar-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .avatar-card{
+    background:var(--panel); border-radius:var(--radius); padding:14px;
+    border:1px solid rgba(231,184,75,0.18); text-align:left; position:relative; overflow:hidden;
+  }
+  .avatar-card.selected{border-color:var(--gold); box-shadow:0 0 0 2px rgba(231,184,75,0.4) inset, 0 8px 20px var(--shadow);}
+  .avatar-card .icon{
+    width:100%; aspect-ratio:1; border-radius:12px; font-size:34px;
+    background:radial-gradient(circle at 35% 30%, var(--panel-2), var(--void));
+    display:flex; align-items:center; justify-content:center; margin-bottom:8px;
+  }
+  .avatar-card .name{font-family:'Cinzel',serif; font-weight:700; font-size:13.5px; color:var(--gold-bright); line-height:1.25;}
+  .avatar-card .power{font-size:11px; color:var(--parchment-dim); margin-top:4px; line-height:1.35; min-height:28px;}
+  .avatar-card .tag{
+    display:inline-block; margin-top:8px; font-size:10.5px; font-weight:800; letter-spacing:0.06em;
+    padding:4px 8px; border-radius:999px;
+  }
+  .tag.free{background:rgba(52,163,127,0.18); color:#5FD8AE; border:1px solid rgba(52,163,127,0.5);}
+  .tag.locked{background:rgba(193,68,59,0.18); color:#F0897E; border:1px solid rgba(193,68,59,0.5);}
+  .avatar-card .unlockbtn{
+    margin-top:8px; width:100%; padding:8px; border-radius:8px; font-size:11.5px; font-weight:800;
+    background:linear-gradient(160deg, var(--crimson-bright), var(--crimson)); color:#2B0C09;
+  }
+
+  /* ---------- Level select ---------- */
+  .level-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px;}
+  .level-card{
+    aspect-ratio:1; border-radius:var(--radius); background:var(--panel);
+    border:1px solid rgba(231,184,75,0.2); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+  }
+  .level-card .num{font-family:'Cinzel',serif; font-size:26px; font-weight:800; color:var(--gold-bright);}
+  .level-card .tgt{font-size:9.5px; color:var(--parchment-dim); text-align:center; padding:0 4px;}
+  .level-card.locked{opacity:0.4;}
+  .level-card.locked .num{color:var(--parchment-dim);}
+
+  /* ---------- Gameplay ---------- */
+  .hud{display:flex; gap:10px; margin-bottom:12px;}
+  .hud-box{flex:1; background:var(--panel); border:1px solid rgba(231,184,75,0.2); border-radius:12px; padding:9px 10px;}
+  .hud-box .k{font-size:9.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--parchment-dim);}
+  .hud-box .v{font-family:'Cinzel',serif; font-weight:700; font-size:17px; color:var(--gold-bright);}
+  .progress-outer{height:8px; border-radius:999px; background:rgba(0,0,0,0.35); overflow:hidden; margin-top:5px;}
+  .progress-inner{height:100%; background:linear-gradient(90deg, var(--gold), var(--gold-bright)); width:0%; transition:width .25s ease;}
+
+  .battle-scorebars{display:flex; flex-direction:column; gap:6px; margin-bottom:10px;}
+  .sb-row{display:flex; align-items:center; gap:8px;}
+  .sb-row .who{width:64px; font-size:11px; font-weight:700; flex-shrink:0;}
+  .sb-outer{flex:1; height:10px; border-radius:999px; background:rgba(0,0,0,0.35); overflow:hidden;}
+  .sb-inner{height:100%; width:0%; transition:width .3s ease;}
+  .sb-inner.you{background:linear-gradient(90deg, var(--emerald), #5FD8AE);}
+  .sb-inner.ai{background:linear-gradient(90deg, var(--crimson), var(--crimson-bright));}
+  .sb-num{width:38px; text-align:right; font-size:11px; font-weight:700;}
+
+  .board-wrap{
+    position:relative; width:100%; aspect-ratio:1; margin:6px 0 14px;
+    background:var(--panel); border-radius:18px; border:1px solid rgba(231,184,75,0.22);
+    padding:6px; box-shadow:inset 0 0 30px rgba(0,0,0,0.4);
+  }
+  .board{position:relative; width:100%; height:100%;}
+  .tile{
+    position:absolute; display:flex; align-items:center; justify-content:center;
+    font-size:min(6.4vw, 26px); border-radius:10px;
+    background:linear-gradient(160deg, var(--panel-2), var(--void-2));
+    border:1px solid rgba(231,184,75,0.14);
+    transition:transform .22s cubic-bezier(.34,1.56,.64,1), opacity .18s ease;
+    will-change:transform;
+    touch-action:none;
+    user-select:none;
+  }
+  .tile.selected{box-shadow:0 0 0 2px var(--gold-bright) inset; background:linear-gradient(160deg, #3A2560, var(--panel-2));}
+  .tile.clearing{transform:scale(0) !important; opacity:0;}
+  .tile.spawning{opacity:0;}
+
+  .power-row{display:flex; align-items:center; gap:14px; margin-top:auto;}
+  .power-ring-btn{
+    position:relative; width:74px; height:74px; flex-shrink:0; border-radius:50%; background:transparent;
+  }
+  .power-ring-btn svg{width:100%; height:100%; transform:rotate(-90deg);}
+  .power-ring-btn .bg{fill:none; stroke:rgba(255,255,255,0.08); stroke-width:8;}
+  .power-ring-btn .fill{fill:none; stroke:var(--gold); stroke-width:8; stroke-linecap:round; transition:stroke-dashoffset .3s ease;}
+  .power-ring-btn .center-icon{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:26px;
+  }
+  .power-ring-btn.ready .fill{stroke:var(--gold-bright); filter:drop-shadow(0 0 6px var(--gold-bright));}
+  .power-ring-btn.ready{animation:pulseRing 1.1s ease-in-out infinite;}
+  @keyframes pulseRing{0%,100%{filter:drop-shadow(0 0 0 rgba(247,215,122,0));} 50%{filter:drop-shadow(0 0 14px rgba(247,215,122,0.55));}}
+  .power-info{flex:1;}
+  .power-info .pname{font-family:'Cinzel',serif; font-weight:700; font-size:13.5px; color:var(--gold-bright);}
+  .power-info .pdesc{font-size:11px; color:var(--parchment-dim); margin-top:2px;}
+  .power-info .pstate{font-size:10.5px; margin-top:4px; font-weight:800; letter-spacing:0.05em; color:var(--parchment-dim);}
+  .power-ring-btn.ready .pstate-tag{color:var(--gold-bright);}
+
+  /* ---------- Results ---------- */
+  .results-wrap{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;}
+  .results-wrap .banner{font-size:44px; margin-bottom:6px;}
+  .results-wrap h2{font-size:26px; margin:0 0 4px; color:var(--gold-bright);}
+  .results-wrap .sub{color:var(--parchment-dim); font-size:13px; margin-bottom:20px;}
+  .results-stats{display:flex; gap:10px; margin-bottom:26px;}
+  .results-stats .stat{background:var(--panel); border:1px solid rgba(231,184,75,0.2); border-radius:12px; padding:12px 16px;}
+  .results-stats .stat .v{font-family:'Cinzel',serif; font-weight:800; font-size:18px; color:var(--gold-bright);}
+  .results-stats .stat .k{font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--parchment-dim);}
+  .results-actions{display:flex; flex-direction:column; gap:10px; width:100%;}
+
+  .btn{
+    padding:14px; border-radius:12px; font-weight:800; font-family:'Cinzel',serif; font-size:14.5px; text-align:center;
+  }
+  .btn.gold{background:linear-gradient(160deg, var(--gold-bright), var(--gold)); color:#2A1B08;}
+  .btn.ghost{background:var(--panel); color:var(--parchment); border:1px solid rgba(231,184,75,0.3);}
+
+  .toast{
+    position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px);
+    background:var(--panel); border:1px solid var(--gold); color:var(--parchment);
+    padding:10px 18px; border-radius:999px; font-size:12.5px; font-weight:600;
+    opacity:0; transition:all .25s ease; pointer-events:none; z-index:50; max-width:88%; text-align:center;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HOME -->
+  <section class="screen active" id="screen-home">
+    <div class="topbar">
+      <div></div>
+      <div class="gemcount">💎 <span id="home-gems">500</span></div>
+    </div>
+    <div class="home-hero">
+      <div class="crest">🏛️</div>
+      <h1>Match Legends</h1>
+      <p>Legends never miss a match</p>
+    </div>
+    <div class="avatar-strip" id="home-avatar-strip" tabindex="0" role="button" aria-label="Change legend">
+      <div class="icon" id="home-avatar-icon">🤺</div>
+      <div class="info">
+        <div class="label">Your Legend</div>
+        <div class="name" id="home-avatar-name">Marcus the Gladiator</div>
+      </div>
+      <div class="change">Change</div>
+    </div>
+    <button class="menu-btn primary" id="btn-goto-levels">
+      <span class="emo">⚔️</span>
+      <span>Solo Campaign<small>Beat targets, climb the ranks</small></span>
+    </button>
+    <button class="menu-btn secondary" id="btn-goto-battle">
+      <span class="emo">🔥</span>
+      <span>Battle Arena<small>Race an AI legend, 60 seconds</small></span>
+    </button>
+  </section>
+
+  <!-- AVATAR SELECT -->
+  <section class="screen" id="screen-avatars">
+    <div class="topbar">
+      <button class="backbtn" data-back="screen-home">←</button>
+      <div class="screen-title">Choose Your Legend</div>
+      <div class="gemcount">💎 <span id="avsel-gems">500</span></div>
+    </div>
+    <div class="avatar-grid" id="avatar-grid"></div>
+  </section>
+
+  <!-- LEVEL SELECT -->
+  <section class="screen" id="screen-levels">
+    <div class="topbar">
+      <button class="backbtn" data-back="screen-home">←</button>
+      <div class="screen-title">Solo Campaign</div>
+      <div class="gemcount">💎 <span id="lvlsel-gems">500</span></div>
+    </div>
+    <div class="level-grid" id="level-grid"></div>
+  </section>
+
+  <!-- GAMEPLAY -->
+  <section class="screen" id="screen-game">
+    <div class="topbar">
+      <button class="backbtn" id="btn-game-back">←</button>
+      <div class="screen-title" id="game-title">Level 1</div>
+      <div class="gemcount">💎 <span id="game-gems">500</span></div>
+    </div>
+
+    <div id="solo-hud" class="hud">
+      <div class="hud-box">
+        <div class="k">Score / Target</div>
+        <div class="v" id="solo-score">0 / 800</div>
+        <div class="progress-outer"><div class="progress-inner" id="solo-progress"></div></div>
+      </div>
+      <div class="hud-box">
+        <div class="k">Moves Left</div>
+        <div class="v" id="solo-moves">20</div>
+      </div>
+    </div>
+
+    <div id="battle-hud" style="display:none;">
+      <div class="battle-scorebars">
+        <div class="sb-row">
+          <div class="who">You</div>
+          <div class="sb-outer"><div class="sb-inner you" id="battle-you-bar"></div></div>
+          <div class="sb-num" id="battle-you-score">0</div>
+        </div>
+        <div class="sb-row">
+          <div class="who" id="battle-ai-name">AI</div>
+          <div class="sb-outer"><div class="sb-inner ai" id="battle-ai-bar"></div></div>
+          <div class="sb-num" id="battle-ai-score">0</div>
+        </div>
+      </div>
+      <div class="hud" style="margin-bottom:8px;">
+        <div class="hud-box">
+          <div class="k">Time Left</div>
+          <div class="v" id="battle-timer">60s</div>
+        </div>
+        <div class="hud-box">
+          <div class="k">Target</div>
+          <div class="v" id="battle-target">1800</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="board-wrap"><div class="board" id="board"></div></div>
+
+    <div class="power-row">
+      <button class="power-ring-btn" id="power-btn">
+        <svg viewBox="0 0 100 100">
+          <circle class="bg" cx="50" cy="50" r="42"></circle>
+          <circle class="fill" cx="50" cy="50" r="42" id="power-ring-fill"></circle>
+        </svg>
+        <div class="center-icon" id="power-icon">🤺</div>
+      </button>
+      <div class="power-info">
+        <div class="pname" id="power-name">Arena Smash</div>
+        <div class="pdesc" id="power-desc">Clear an entire row</div>
+        <div class="pstate" id="power-state">CHARGING · 0/18</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section class="screen" id="screen-results">
+    <div class="results-wrap">
+      <div class="banner" id="res-banner">🏆</div>
+      <h2 id="res-title">Victory!</h2>
+      <div class="sub" id="res-sub">You crushed the target.</div>
+      <div class="results-stats">
+        <div class="stat"><div class="v" id="res-score">0</div><div class="k">Score</div></div>
+        <div class="stat"><div class="v" id="res-gems">+0</div><div class="k">Gems</div></div>
+      </div>
+      <div class="results-actions">
+        <button class="btn gold" id="res-primary">Next Level</button>
+        <button class="btn ghost" id="res-home">Back to Menu</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* =========================================================
+   DATA
+========================================================= */
+const TILE_ICONS = { sword:'⚔️', shield:'🛡️', urn:'🏺', crown:'👑', flame:'🔥', gem:'💎' };
+const TYPES = Object.keys(TILE_ICONS);
+const ROWS = 8, COLS = 8;
+
+const AVATARS = [
+  { id:'gladiator', name:'Marcus the Gladiator', icon:'🤺', free:true, powerName:'Arena Smash', powerDesc:'Clears an entire row', charge:18, effect:'clearRow' },
+  { id:'viking', name:'Astrid Frostbane', icon:'🪓', free:true, powerName:'Berserker Fury', powerDesc:'Clears an entire column', charge:18, effect:'clearColumn' },
+  { id:'shaman', name:'Old Maren', icon:'🌿', free:true, powerName:"Nature's Gift", powerDesc:'Reshuffles 4 tiles to match', charge:15, effect:'convertTiles' },
+  { id:'pharaoh', name:'Queen Nefret', icon:'🏺', free:false, price:'$2.00', powerName:'Curse of Ra', powerDesc:'Clears every tile of one type', charge:20, effect:'clearType' },
+  { id:'odin', name:'Odin Stormfather', icon:'🔱', free:false, price:'$2.00', powerName:'Thunder Strike', powerDesc:'Clears a 3x3 area', charge:16, effect:'clearArea' },
+  { id:'spartan', name:'King Leonidas', icon:'👑', free:false, price:'$2.00', powerName:'This. Is. SPARTA!', powerDesc:'+5 extra moves, instantly', charge:14, effect:'extraMoves' },
+];
+
+const LEVELS = [
+  { id:1, target:800,  moves:20 },
+  { id:2, target:1200, moves:20 },
+  { id:3, target:1600, moves:18 },
+  { id:4, target:2200, moves:18 },
+  { id:5, target:2800, moves:16 },
+  { id:6, target:3600, moves:16 },
+];
+
+const AI_NAMES = [
+  { name:'Jarl Bjorn', icon:'🪓' }, { name:'Centurion Gaius', icon:'🛡️' },
+  { name:'Priestess Isis', icon:'🏺' }, { name:'Ragnar the Bold', icon:'🔱' },
+];
+
+const BATTLE_TARGET = 1800;
+const BATTLE_SECONDS = 60;
+
+/* =========================================================
+   STORAGE (best-effort; falls back to in-memory)
+========================================================= */
+const Storage = {
+  async load(key, fallback){
+    try{
+      if (window.storage){
+        const res = await window.storage.get(key);
+        return res ? JSON.parse(res.value) : fallback;
+      }
+    }catch(e){ /* no saved value yet, or storage unavailable */ }
+    return fallback;
+  },
+  async save(key, value){
+    try{ if (window.storage) await window.storage.set(key, JSON.stringify(value)); }
+    catch(e){ /* non-fatal */ }
+  }
+};
+
+/* =========================================================
+   APP STATE
+========================================================= */
+const appState = {
+  gems: 500,
+  unlocked: ['gladiator','viking','shaman'],
+  selectedAvatarId: 'gladiator',
+  maxLevelUnlocked: 1,
+};
+
+function selectedAvatar(){ return AVATARS.find(a => a.id === appState.selectedAvatarId); }
+
+async function persistProgress(){
+  await Storage.save('ml_progress', {
+    gems: appState.gems, unlocked: appState.unlocked,
+    selectedAvatarId: appState.selectedAvatarId, maxLevelUnlocked: appState.maxLevelUnlocked
+  });
+}
+
+/* =========================================================
+   BOARD LOGIC (pure, tested separately)
+========================================================= */
+function randType(exclude){
+  exclude = exclude || [];
+  const pool = TYPES.filter(t => exclude.indexOf(t) === -1);
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+function createBoard(){
+  const board = [];
+  for (let r=0;r<ROWS;r++){
+    const row = [];
+    for (let c=0;c<COLS;c++){
+      const exclude = [];
+      if (c>=2 && row[c-1]===row[c-2]) exclude.push(row[c-1]);
+      if (r>=2 && board[r-1][c]===board[r-2][c]) exclude.push(board[r-1][c]);
+      row.push(randType(exclude));
+    }
+    board.push(row);
+  }
+  return board;
+}
+function findMatches(board){
+  const matched = new Set();
+  for (let r=0;r<ROWS;r++){
+    let start=0;
+    for (let c=1;c<=COLS;c++){
+      if (c<COLS && board[r][c]===board[r][start]) continue;
+      if (c-start>=3) for (let k=start;k<c;k++) matched.add(r+','+k);
+      start=c;
+    }
+  }
+  for (let c=0;c<COLS;c++){
+    let start=0;
+    for (let r=1;r<=ROWS;r++){
+      if (r<ROWS && board[r][c]===board[start][c]) continue;
+      if (r-start>=3) for (let k=start;k<r;k++) matched.add(k+','+c);
+      start=r;
+    }
+  }
+  return matched;
+}
+function isAdjacent(a,b){ return Math.abs(a.r-b.r)+Math.abs(a.c-b.c)===1; }
+function swapCells(board,a,b){ const t=board[a.r][a.c]; board[a.r][a.c]=board[b.r][b.c]; board[b.r][b.c]=t; }
+function hasPossibleMove(board){
+  for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++){
+    const neigh=[{r:r+1,c},{r,c:c+1}];
+    for (const n of neigh){
+      if (n.r>=ROWS||n.c>=COLS) continue;
+      swapCells(board,{r,c},n);
+      const m=findMatches(board);
+      swapCells(board,{r,c},n);
+      if (m.size>0) return true;
+    }
+  }
+  return false;
+}
+// Returns collapse plan: for each column, list of {fromRow(or null if new), toRow, type}
+function computeCollapse(board, matchedSet){
+  const plan = [];
+  for (let c=0;c<COLS;c++){
+    const survivors = [];
+    for (let r=0;r<ROWS;r++){
+      if (!matchedSet.has(r+','+c)) survivors.push({fromRow:r, type:board[r][c]});
+    }
+    const newCount = ROWS - survivors.length;
+    const newTiles = [];
+    for (let i=0;i<newCount;i++) newTiles.push({fromRow:null, type:randType()});
+    const finalCol = newTiles.concat(survivors);
+    for (let r=0;r<ROWS;r++){
+      plan.push({ col:c, toRow:r, fromRow:finalCol[r].fromRow, type:finalCol[r].type });
+      board[r][c] = finalCol[r].type;
+    }
+  }
+  return plan;
+}
+
+/* =========================================================
+   RENDERING HELPERS
+========================================================= */
+const boardEl = document.getElementById('board');
+let tileSize = 0;
+function recalcTileSize(){ tileSize = boardEl.clientWidth / COLS; }
+
+function tileEl(type, row, col, key){
+  const d = document.createElement('div');
+  d.className = 'tile';
+  d.textContent = TILE_ICONS[type];
+  d.dataset.row = row; d.dataset.col = col; d.dataset.key = key;
+  positionTile(d, row, col);
+  return d;
+}
+function positionTile(el, row, col){
+  el.style.width = tileSize + 'px';
+  el.style.height = tileSize + 'px';
+  el.style.transform = `translate(${col*tileSize}px, ${row*tileSize}px)`;
+}
+function sleep(ms){ return new Promise(res=>setTimeout(res,ms)); }
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* =========================================================
+   GAME SESSION
+========================================================= */
+let session = null; // active game session object
+let tileKeySeq = 1;
+
+function freshRenderBoard(board){
+  boardEl.innerHTML = '';
+  recalcTileSize();
+  const map = {};
+  for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++){
+    const key = 'k'+(tileKeySeq++);
+    const el = tileEl(board[r][c], r, c, key);
+    boardEl.appendChild(el);
+    map[r+','+c] = el;
+  }
+  return map;
+}
+
+function startSoloLevel(levelId){
+  const lvl = LEVELS.find(l=>l.id===levelId);
+  session = {
+    mode:'solo', level: lvl, board: createBoard(), score:0, movesLeft: lvl.moves,
+    charge:0, elMap:null, busy:false, selected:null
+  };
+  document.getElementById('solo-hud').style.display = 'flex';
+  document.getElementById('battle-hud').style.display = 'none';
+  document.getElementById('game-title').textContent = 'Level ' + lvl.id;
+  goto('screen-game');
+  requestAnimationFrame(()=>{
+    session.elMap = freshRenderBoard(session.board);
+    bindBoardEvents();
+    updateSoloHud();
+    updatePowerUI();
+  });
+}
+
+function startBattle(){
+  const opp = AI_NAMES[Math.floor(Math.random()*AI_NAMES.length)];
+  session = {
+    mode:'battle', board:createBoard(), score:0, aiScore:0, timeLeft:BATTLE_SECONDS,
+    charge:0, elMap:null, busy:false, selected:null, opp,
+    aiTimer:null, clockTimer:null, ended:false
+  };
+  document.getElementById('solo-hud').style.display = 'none';
+  document.getElementById('battle-hud').style.display = 'block';
+  document.getElementById('game-title').textContent = 'Battle Arena';
+  document.getElementById('battle-ai-name').textContent = opp.icon + ' ' + opp.name;
+  document.getElementById('battle-target').textContent = BATTLE_TARGET;
+  goto('screen-game');
+  requestAnimationFrame(()=>{
+    session.elMap = freshRenderBoard(session.board);
+    bindBoardEvents();
+    updateBattleHud();
+    updatePowerUI();
+    session.clockTimer = setInterval(battleTick, 1000);
+    scheduleAiTick();
+  });
+}
+
+function scheduleAiTick(){
+  const delay = 1100 + Math.random()*900;
+  session.aiTimer = setTimeout(()=>{
+    if (!session || session.mode!=='battle' || session.ended) return;
+    const burst = Math.random() < 0.18;
+    const gain = burst ? (90 + Math.floor(Math.random()*70)) : (25 + Math.floor(Math.random()*45));
+    session.aiScore += gain;
+    updateBattleHud();
+    if (session.aiScore >= BATTLE_TARGET) endBattle(false);
+    else scheduleAiTick();
+  }, delay);
+}
+function battleTick(){
+  if (!session || session.ended) return;
+  session.timeLeft -= 1;
+  updateBattleHud();
+  if (session.timeLeft <= 0) endBattle(session.score >= session.aiScore);
+}
+function endBattle(playerWon){
+  if (!session || session.ended) return;
+  session.ended = true;
+  clearInterval(session.clockTimer);
+  clearTimeout(session.aiTimer);
+  const gained = playerWon ? 60 : 15;
+  appState.gems += gained; persistProgress(); updateGemDisplays();
+  showResults({
+    win: playerWon,
+    title: playerWon ? 'Victory!' : 'Defeated',
+    sub: playerWon ? `You outscored ${session.opp.name}!` : `${session.opp.name} edged you out.`,
+    score: session.score, gems: gained,
+    primaryLabel: 'Battle Again',
+    primaryAction: ()=>startBattle()
+  });
+}
+
+function updateSoloHud(){
+  document.getElementById('solo-score').textContent = `${session.score} / ${session.level.target}`;
+  document.getElementById('solo-moves').textContent = session.movesLeft;
+  const pct = Math.min(100, (session.score/session.level.target)*100);
+  document.getElementById('solo-progress').style.width = pct+'%';
+  updateGemDisplays();
+}
+function updateBattleHud(){
+  document.getElementById('battle-you-score').textContent = session.score;
+  document.getElementById('battle-ai-score').textContent = session.aiScore;
+  document.getElementById('battle-you-bar').style.width = Math.min(100, session.score/BATTLE_TARGET*100)+'%';
+  document.getElementById('battle-ai-bar').style.width = Math.min(100, session.aiScore/BATTLE_TARGET*100)+'%';
+  document.getElementById('battle-timer').textContent = session.timeLeft+'s';
+}
+function updateGemDisplays(){
+  ['home-gems','avsel-gems','lvlsel-gems','game-gems'].forEach(id=>{
+    const el = document.getElementById(id); if (el) el.textContent = appState.gems;
+  });
+}
+function updatePowerUI(){
+  const av = selectedAvatar();
+  document.getElementById('power-icon').textContent = av.icon;
+  document.getElementById('power-name').textContent = av.powerName;
+  document.getElementById('power-desc').textContent = av.powerDesc;
+  const ring = document.getElementById('power-ring-fill');
+  const circumference = 2*Math.PI*42;
+  ring.style.strokeDasharray = circumference;
+  const pct = session ? Math.min(1, session.charge/av.charge) : 0;
+  ring.style.strokeDashoffset = circumference * (1-pct);
+  const btn = document.getElementById('power-btn');
+  const stateEl = document.getElementById('power-state');
+  const ready = session && session.charge >= av.charge;
+  btn.classList.toggle('ready', !!ready);
+  stateEl.textContent = ready ? 'READY · TAP TO UNLEASH' : `CHARGING · ${session?session.charge:0}/${av.charge}`;
+}
+
+/* =========================================================
+   BOARD INTERACTION (swipe to swap)
+========================================================= */
+function bindBoardEvents(){
+  let start = null;
+  boardEl.onpointerdown = (e)=>{
+    if (!session || session.busy) return;
+    const t = e.target.closest('.tile'); if (!t) return;
+    if (t.setPointerCapture) { try { t.setPointerCapture(e.pointerId); } catch(err){} }
+    start = { r:+t.dataset.row, c:+t.dataset.col, x:e.clientX, y:e.clientY };
+  };
+  boardEl.onpointerup = (e)=>{
+    if (!start || !session || session.busy) return;
+    const s = start; start = null;
+    const dx = e.clientX - s.x, dy = e.clientY - s.y;
+    const absX = Math.abs(dx), absY = Math.abs(dy);
+    if (Math.max(absX,absY) < 18) return;
+    let target;
+    if (absX > absY) target = { r:s.r, c:s.c + (dx>0?1:-1) };
+    else target = { r:s.r + (dy>0?1:-1), c:s.c };
+    if (target.r<0||target.r>=ROWS||target.c<0||target.c>=COLS) return;
+    attemptSwap({r:s.r,c:s.c}, target);
+  };
+}
+
+async function attemptSwap(a, b){
+  if (!isAdjacent(a,b) || session.busy) return;
+  session.busy = true;
+  swapCells(session.board, a, b);
+  const matched = findMatches(session.board);
+  if (matched.size === 0){
+    swapCells(session.board, a, b); // revert data
+    await animateSwap(a,b, true); // visual swap-and-back
+    session.busy = false;
+    return;
+  }
+  // valid: play swap visually then resolve
+  await animateSwap(a,b,false);
+  await resolveCascade(matched, 1);
+  if (session.mode === 'solo'){
+    session.movesLeft -= 1;
+    updateSoloHud();
+    checkSoloEnd();
+  } else {
+    updateBattleHud();
+    if (session.score >= BATTLE_TARGET) { session.busy=false; endBattle(true); return; }
+  }
+  session.busy = false;
+}
+
+async function animateSwap(a,b, revert){
+  const elA = session.elMap[a.r+','+a.c];
+  const elB = session.elMap[b.r+','+b.c];
+  if (!elA || !elB) return;
+  positionTile(elA, b.r, b.c);
+  positionTile(elB, a.r, a.c);
+  await sleep(180);
+  if (revert){
+    positionTile(elA, a.r, a.c);
+    positionTile(elB, b.r, b.c);
+    await sleep(180);
+    return;
+  }
+  // commit swap in the element map
+  session.elMap[a.r+','+a.c] = elB;
+  session.elMap[b.r+','+b.c] = elA;
+  elA.dataset.row = b.r; elA.dataset.col = b.c;
+  elB.dataset.row = a.r; elB.dataset.col = a.c;
+}
+
+async function resolveCascade(firstMatch, comboStart){
+  let matched = firstMatch;
+  let combo = comboStart;
+  while (matched.size > 0){
+    // score
+    const av = selectedAvatar();
+    session.score += matched.size * 10 * combo;
+    session.charge = Math.min(av.charge, session.charge + matched.size);
+    updatePowerUI();
+    // clear animation
+    matched.forEach(key=>{
+      const el = session.elMap[key];
+      if (el) el.classList.add('clearing');
+    });
+    await sleep(200);
+    // compute collapse plan and animate fall
+    const plan = computeCollapse(session.board, matched);
+    await animateCollapse(plan);
+    matched = findMatches(session.board);
+    combo += 1;
+    if (session.mode==='solo') updateSoloHud(); else updateBattleHud();
+  }
+  if (!hasPossibleMove(session.board)){
+    await sleep(250);
+    session.board = createBoard();
+    session.elMap = freshRenderBoard(session.board);
+    showToast('No moves left — board reshuffled');
+  }
+}
+
+async function animateCollapse(plan){
+  const newMap = {};
+  const incoming = [];
+  for (const item of plan){
+    const key = item.col + ':' + item.toRow;
+    if (item.fromRow !== null){
+      const el = session.elMap[item.fromRow + ',' + item.col];
+      if (el){
+        el.classList.remove('clearing');
+        newMap[item.toRow+','+item.col] = el;
+        el.dataset.row = item.toRow; el.dataset.col = item.col;
+      }
+    } else {
+      const keyId = 'k'+(tileKeySeq++);
+      const el = tileEl(item.type, -1 - Math.random()*2, item.col, keyId);
+      el.classList.add('spawning');
+      boardEl.appendChild(el);
+      newMap[item.toRow+','+item.col] = el;
+      incoming.push(el);
+    }
+  }
+  // clean any leftover old elements still marked clearing (already-cleared cells not reassigned)
+  Object.keys(session.elMap).forEach(k=>{
+    const el = session.elMap[k];
+    if (el && el.classList.contains('clearing') && !Object.values(newMap).includes(el)){
+      el.remove();
+    }
+  });
+  session.elMap = newMap;
+  void boardEl.offsetWidth; // force reflow
+  incoming.forEach(el=> el.style.opacity = '0');
+  Object.keys(session.elMap).forEach(key=>{
+    const [r,c] = key.split(',').map(Number);
+    positionTile(session.elMap[key], r, c);
+  });
+  incoming.forEach(el=>{ el.style.opacity=''; el.classList.remove('spawning'); });
+  await sleep(230);
+}
+
+function checkSoloEnd(){
+  if (session.score >= session.level.target){
+    appState.maxLevelUnlocked = Math.max(appState.maxLevelUnlocked, session.level.id+1);
+    const gained = 40;
+    appState.gems += gained; persistProgress(); updateGemDisplays();
+    showResults({
+      win:true, title:'Victory!', sub:'Target crushed with moves to spare.',
+      score: session.score, gems: gained,
+      primaryLabel: session.level.id < LEVELS.length ? 'Next Level' : 'Back to Levels',
+      primaryAction: ()=> session.level.id < LEVELS.length ? startSoloLevel(session.level.id+1) : goto('screen-levels', renderLevelGrid)
+    });
+  } else if (session.movesLeft <= 0){
+    const gained = 5;
+    appState.gems += gained; persistProgress(); updateGemDisplays();
+    showResults({
+      win:false, title:'Out of Moves', sub:'So close — try again?',
+      score: session.score, gems: gained,
+      primaryLabel:'Retry Level',
+      primaryAction: ()=>startSoloLevel(session.level.id)
+    });
+  }
+}
+
+/* =========================================================
+   AVATAR POWERS
+========================================================= */
+document.getElementById('power-btn').addEventListener('click', async ()=>{
+  if (!session || session.busy) return;
+  const av = selectedAvatar();
+  if (session.charge < av.charge) return;
+  session.busy = true;
+  session.charge = 0;
+  let matched = new Set();
+  switch(av.effect){
+    case 'clearRow': {
+      const r = Math.floor(Math.random()*ROWS);
+      for (let c=0;c<COLS;c++) matched.add(r+','+c);
+      break;
+    }
+    case 'clearColumn': {
+      const c = Math.floor(Math.random()*COLS);
+      for (let r=0;r<ROWS;r++) matched.add(r+','+c);
+      break;
+    }
+    case 'clearArea': {
+      const cr = 1+Math.floor(Math.random()*(ROWS-2));
+      const cc = 1+Math.floor(Math.random()*(COLS-2));
+      for (let r=cr-1;r<=cr+1;r++) for (let c=cc-1;c<=cc+1;c++) matched.add(r+','+c);
+      break;
+    }
+    case 'clearType': {
+      const counts = {};
+      for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++){
+        const t = session.board[r][c]; counts[t]=(counts[t]||0)+1;
+      }
+      const best = Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
+      for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) if (session.board[r][c]===best) matched.add(r+','+c);
+      break;
+    }
+    case 'convertTiles': {
+      const t = randType();
+      let placed = 0, tries=0;
+      while (placed < 4 && tries < 60){
+        tries++;
+        const r = Math.floor(Math.random()*ROWS), c = Math.floor(Math.random()*COLS);
+        if (session.board[r][c] !== t){ session.board[r][c] = t; placed++; }
+      }
+      const el = session.elMap;
+      Object.keys(el).forEach(key=>{
+        const [r,c] = key.split(',').map(Number);
+        el[key].textContent = TILE_ICONS[session.board[r][c]];
+      });
+      matched = findMatches(session.board);
+      break;
+    }
+    case 'extraMoves': {
+      if (session.mode==='solo'){ session.movesLeft += 5; updateSoloHud(); }
+      else { session.timeLeft += 8; updateBattleHud(); }
+      showToast(av.powerName + ' unleashed!');
+      updatePowerUI();
+      session.busy = false;
+      return;
+    }
+  }
+  showToast(av.powerName + ' unleashed!');
+  updatePowerUI();
+  if (matched.size > 0){
+    await resolveCascade(matched, 1);
+  }
+  if (session.mode==='solo'){ updateSoloHud(); checkSoloEnd(); }
+  else { updateBattleHud(); if (session.score >= BATTLE_TARGET){ session.busy=false; endBattle(true); return; } }
+  session.busy = false;
+});
+
+/* =========================================================
+   RESULTS SCREEN
+========================================================= */
+function showResults({win,title,sub,score,gems,primaryLabel,primaryAction}){
+  document.getElementById('res-banner').textContent = win ? '🏆' : '💀';
+  document.getElementById('res-title').textContent = title;
+  document.getElementById('res-sub').textContent = sub;
+  document.getElementById('res-score').textContent = score;
+  document.getElementById('res-gems').textContent = '+'+gems;
+  document.getElementById('res-primary').textContent = primaryLabel;
+  document.getElementById('res-primary').onclick = primaryAction;
+  goto('screen-results');
+}
+
+/* =========================================================
+   AVATAR SELECT SCREEN
+========================================================= */
+function renderAvatarGrid(){
+  const grid = document.getElementById('avatar-grid');
+  grid.innerHTML = '';
+  AVATARS.forEach(av=>{
+    const unlocked = appState.unlocked.includes(av.id);
+    const card = document.createElement('div');
+    card.className = 'avatar-card' + (appState.selectedAvatarId===av.id ? ' selected':'');
+    card.innerHTML = `
+      <div class="icon">${av.icon}</div>
+      <div class="name">${av.name}</div>
+      <div class="power">${av.powerName} — ${av.powerDesc}</div>
+      <span class="tag ${unlocked ? 'free':'locked'}">${unlocked ? (av.free?'FREE':'UNLOCKED') : 'LOCKED · '+av.price}</span>
+    `;
+    if (unlocked){
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', ()=>{
+        appState.selectedAvatarId = av.id;
+        persistProgress();
+        renderAvatarGrid();
+        updateHomeAvatar();
+      });
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'unlockbtn';
+      btn.textContent = `Unlock ${av.price} (Test Mode)`;
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        appState.unlocked.push(av.id);
+        appState.selectedAvatarId = av.id;
+        persistProgress();
+        renderAvatarGrid();
+        updateHomeAvatar();
+        showToast('Test unlock — wire up real payments before launch');
+      });
+      card.appendChild(btn);
+    }
+    grid.appendChild(card);
+  });
+}
+function updateHomeAvatar(){
+  const av = selectedAvatar();
+  document.getElementById('home-avatar-icon').textContent = av.icon;
+  document.getElementById('home-avatar-name').textContent = av.name;
+}
+
+/* =========================================================
+   LEVEL SELECT SCREEN
+========================================================= */
+function renderLevelGrid(){
+  const grid = document.getElementById('level-grid');
+  grid.innerHTML = '';
+  LEVELS.forEach(lvl=>{
+    const locked = lvl.id > appState.maxLevelUnlocked;
+    const card = document.createElement('div');
+    card.className = 'level-card' + (locked ? ' locked':'');
+    card.innerHTML = `<div class="num">${locked?'🔒':lvl.id}</div><div class="tgt">${lvl.target} pts · ${lvl.moves} moves</div>`;
+    if (!locked) card.addEventListener('click', ()=> startSoloLevel(lvl.id));
+    grid.appendChild(card);
+  });
+}
+
+/* =========================================================
+   NAVIGATION
+========================================================= */
+function goto(screenId, cb){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(screenId).classList.add('active');
+  if (cb) cb();
+  window.scrollTo(0,0);
+}
+function teardownSessionTimers(){
+  if (session){
+    clearInterval(session.clockTimer);
+    clearTimeout(session.aiTimer);
+  }
+}
+
+document.querySelectorAll('[data-back]').forEach(b=>{
+  b.addEventListener('click', ()=> goto(b.dataset.back));
+});
+document.getElementById('btn-game-back').addEventListener('click', ()=>{
+  teardownSessionTimers();
+  goto(session && session.mode==='solo' ? 'screen-levels' : 'screen-home', session && session.mode==='solo' ? renderLevelGrid : null);
+});
+document.getElementById('home-avatar-strip').addEventListener('click', ()=> goto('screen-avatars', renderAvatarGrid));
+document.getElementById('home-avatar-strip').addEventListener('keydown', (e)=>{ if(e.key==='Enter') goto('screen-avatars', renderAvatarGrid); });
+document.getElementById('btn-goto-levels').addEventListener('click', ()=> goto('screen-levels', renderLevelGrid));
+document.getElementById('btn-goto-battle').addEventListener('click', ()=> startBattle());
+document.getElementById('res-home').addEventListener('click', ()=>{ teardownSessionTimers(); goto('screen-home'); });
+
+window.addEventListener('resize', ()=>{
+  if (session && session.elMap){
+    recalcTileSize();
+    Object.keys(session.elMap).forEach(key=>{
+      const [r,c] = key.split(',').map(Number);
+      positionTile(session.elMap[key], r, c);
+    });
+  }
+});
+
+/* =========================================================
+   BOOT
+========================================================= */
+async function boot(){
+  const saved = await Storage.load('ml_progress', null);
+  if (saved){
+    appState.gems = saved.gems ?? 500;
+    appState.unlocked = saved.unlocked ?? ['gladiator','viking','shaman'];
+    appState.selectedAvatarId = saved.selectedAvatarId ?? 'gladiator';
+    appState.maxLevelUnlocked = saved.maxLevelUnlocked ?? 1;
+  }
+  updateGemDisplays();
+  updateHomeAvatar();
+}
+boot();
+</script>
+</body>
+</html>
