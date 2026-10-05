@@ -5,12 +5,31 @@ const { pathToFileURL } = require('node:url');
 const GAME_URL = pathToFileURL(path.join(__dirname, '..', '..', 'www', 'index.html')).href;
 
 // Open the game and collect console errors and uncaught page errors.
-async function openGame(page) {
+async function openGame(page, query = '') {
   const errors = [];
   page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
   page.on('pageerror', err => errors.push(String(err)));
-  await page.goto(GAME_URL);
+  await page.goto(GAME_URL + query);
   return errors;
+}
+
+// The level being played, as plain data (for comparing before/after).
+async function levelState(page) {
+  return page.evaluate(() => {
+    const s = window.__ML_TEST__.session();
+    return { level: s.level.id, board: { ...s.board }, score: s.score, movesLeft: s.movesLeft };
+  });
+}
+
+// Play one legal move and wait until the cascade has settled.
+async function playOneMove(page) {
+  const before = await page.evaluate(() => window.__ML_TEST__.session().movesLeft);
+  const move = await findLegalSwap(page);
+  await swipe(page, move.a, move.b);
+  await page.waitForFunction(m => {
+    const s = window.__ML_TEST__.session();
+    return s.movesLeft === m && !s.busy;
+  }, before - 1);
 }
 
 async function startLevel(page, levelId = 1) {
@@ -56,4 +75,4 @@ async function swipe(page, a, b) {
   await page.mouse.up();
 }
 
-module.exports = { GAME_URL, openGame, startLevel, findLegalSwap, swipe };
+module.exports = { GAME_URL, openGame, startLevel, findLegalSwap, swipe, levelState, playOneMove };

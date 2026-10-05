@@ -336,5 +336,8 @@
   api.findHint = findHint;
   /* === END TASK SECTION ml-4 === */
 
+  /* === TASK SECTION ml-8 star-rating (add task code and api.* exports here) === */
+  /* === END TASK SECTION ml-8 === */
+
   return api;
 });
