@@ -1,0 +1,1677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Match Legends</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#150E27;
+    --void-2:#1D1438;
+    --panel:#26183F;
+    --panel-2:#31204E;
+    --gold:#E7B84B;
+    --gold-bright:#F7D77A;
+    --crimson:#C1443B;
+    --crimson-bright:#E15B4F;
+    --emerald:#34A37F;
+    --parchment:#F3E9D2;
+    --parchment-dim:#B7ACC4;
+    --shadow:rgba(6,3,16,0.55);
+    --radius:16px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    min-height:100%;
+    background:
+      radial-gradient(circle at 50% -10%, #3A2560 0%, transparent 55%),
+      linear-gradient(180deg, var(--void) 0%, var(--void-2) 100%);
+    color:var(--parchment);
+    font-family:'Inter', system-ui, sans-serif;
+    display:flex;
+    justify-content:center;
+    overflow-x:hidden;
+  }
+  #app{
+    width:100%;
+    max-width:480px;
+    min-height:100vh;
+    min-height:100dvh;
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+  h1,h2,h3,.display{font-family:'Cinzel', serif; letter-spacing:0.02em;}
+  button{font-family:inherit; border:none; cursor:pointer; color:inherit;}
+  button:focus-visible, [tabindex]:focus-visible{outline:2px solid var(--gold-bright); outline-offset:2px;}
+  .screen{display:none; flex-direction:column; flex:1; padding:18px 16px 28px;}
+  .screen.active{display:flex; animation:screenIn .22s cubic-bezier(.34,1.4,.64,1);}
+  @keyframes screenIn{ 0%{ opacity:0; scale:0.97; } 100%{ opacity:1; scale:1; } }
+
+  .backbtn, .gemcount, .menu-btn, .avatar-strip, .avatar-card, .level-card:not(.locked),
+  .power-ring-btn, .hint-btn, .btn, .unlockbtn{ transition:scale .12s ease; }
+  .backbtn:active, .menu-btn:active, .avatar-strip:active, .avatar-card:active,
+  .level-card:not(.locked):active, .power-ring-btn:active, .hint-btn:active, .btn:active, .unlockbtn:active{ scale:0.95; }
+  .hairline{height:1px; background:linear-gradient(90deg, transparent, rgba(231,184,75,0.35), transparent); border:none; margin:14px 0;}
+
+  /* ---------- Top bar ---------- */
+  .topbar{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  .backbtn{
+    width:38px; height:38px; border-radius:50%;
+    background:var(--panel); color:var(--parchment);
+    font-size:18px; display:flex; align-items:center; justify-content:center;
+    border:1px solid rgba(231,184,75,0.25);
+  }
+  .gemcount{
+    display:flex; align-items:center; gap:6px;
+    background:var(--panel); border:1px solid rgba(231,184,75,0.3);
+    padding:7px 12px; border-radius:999px; font-weight:700; font-size:14px;
+  }
+  @keyframes gemPulse{ 0%{ scale:1; } 40%{ scale:1.22; color:var(--gold-bright); } 100%{ scale:1; } }
+  .gemcount.pulse{ animation:gemPulse .35s ease; }
+  .screen-title{font-size:15px; text-transform:uppercase; letter-spacing:0.12em; color:var(--parchment-dim); font-weight:700;}
+
+  /* ---------- Home ---------- */
+  .home-hero{text-align:center; margin:18px 0 8px;}
+  .home-hero .crest{font-size:52px; filter:drop-shadow(0 6px 14px rgba(231,184,75,0.35));}
+  .home-hero h1{font-size:34px; margin:8px 0 2px; color:var(--gold-bright); text-shadow:0 2px 12px rgba(231,184,75,0.35);}
+  .home-hero p{margin:0; color:var(--parchment-dim); font-size:13px; letter-spacing:0.05em; text-transform:uppercase;}
+  .home-hero .prologue{
+    margin:10px auto 0; max-width:300px; font-size:11.5px; line-height:1.5;
+    text-transform:none; letter-spacing:0.01em; font-style:italic; color:var(--parchment-dim);
+  }
+
+  .avatar-strip{
+    display:flex; align-items:center; gap:12px;
+    background:var(--panel); border:1px solid rgba(231,184,75,0.25);
+    border-radius:var(--radius); padding:12px 14px; margin:18px 0 10px;
+  }
+  .avatar-strip .icon{
+    width:52px; height:52px; border-radius:50%; font-size:26px;
+    background:radial-gradient(circle at 35% 30%, var(--panel-2), var(--void));
+    border:2px solid var(--gold); display:flex; align-items:center; justify-content:center;
+  }
+  .avatar-strip .info{flex:1;}
+  .avatar-strip .info .label{font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:var(--parchment-dim);}
+  .avatar-strip .info .name{font-family:'Cinzel',serif; font-weight:700; font-size:16px; color:var(--gold-bright);}
+  .avatar-strip .change{font-size:12px; font-weight:700; color:var(--gold); background:rgba(231,184,75,0.12); padding:8px 12px; border-radius:999px; border:1px solid rgba(231,184,75,0.4);}
+
+  .menu-btn{
+    display:flex; align-items:center; gap:14px;
+    padding:18px 18px; border-radius:var(--radius); margin-bottom:12px;
+    text-align:left; font-size:17px; font-weight:700; font-family:'Cinzel',serif;
+    box-shadow:0 8px 20px var(--shadow);
+  }
+  .menu-btn .emo{font-size:26px;}
+  .menu-btn small{display:block; font-family:'Inter',sans-serif; font-weight:500; font-size:12px; opacity:0.85; margin-top:2px; letter-spacing:0.01em;}
+  .menu-btn.primary{background:linear-gradient(160deg, var(--gold-bright), var(--gold)); color:#2A1B08;}
+  .menu-btn.secondary{background:linear-gradient(160deg, var(--crimson-bright), var(--crimson)); color:#2B0C09;}
+  .menu-btn.resume{background:linear-gradient(160deg, #5FD8AE, var(--emerald)); color:#08251B;}
+
+  /* ---------- Avatar select ---------- */
+  .avatar-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .avatar-card{
+    background:var(--panel); border-radius:var(--radius); padding:14px;
+    border:1px solid rgba(231,184,75,0.18); text-align:left; position:relative; overflow:hidden;
+  }
+  .avatar-card.selected{border-color:var(--gold); box-shadow:0 0 0 2px rgba(231,184,75,0.4) inset, 0 8px 20px var(--shadow);}
+  .avatar-card .icon{
+    width:100%; aspect-ratio:1; border-radius:12px; font-size:34px;
+    background:radial-gradient(circle at 35% 30%, var(--panel-2), var(--void));
+    display:flex; align-items:center; justify-content:center; margin-bottom:8px;
+  }
+  .avatar-card .name{font-family:'Cinzel',serif; font-weight:700; font-size:13.5px; color:var(--gold-bright); line-height:1.25;}
+  .avatar-card .power{font-size:11px; color:var(--parchment-dim); margin-top:4px; line-height:1.35; min-height:28px;}
+  .avatar-card .lore{font-size:10.5px; font-style:italic; color:var(--parchment-dim); opacity:0.8; margin-top:6px; line-height:1.3;}
+  .avatar-card .tag{
+    display:inline-block; margin-top:8px; font-size:10.5px; font-weight:800; letter-spacing:0.06em;
+    padding:4px 8px; border-radius:999px;
+  }
+  .tag.free{background:rgba(52,163,127,0.18); color:#5FD8AE; border:1px solid rgba(52,163,127,0.5);}
+  .tag.locked{background:rgba(193,68,59,0.18); color:#F0897E; border:1px solid rgba(193,68,59,0.5);}
+  .avatar-card .unlockbtn{
+    margin-top:8px; width:100%; padding:8px; border-radius:8px; font-size:11.5px; font-weight:800;
+    background:linear-gradient(160deg, var(--crimson-bright), var(--crimson)); color:#2B0C09;
+  }
+
+  /* ---------- Level select ---------- */
+  .level-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px;}
+  .level-card{
+    aspect-ratio:1; border-radius:var(--radius); background:var(--panel);
+    border:1px solid rgba(231,184,75,0.2); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+  }
+  .level-card .num{font-family:'Cinzel',serif; font-size:26px; font-weight:800; color:var(--gold-bright);}
+  .level-card .tgt{font-size:9.5px; color:var(--parchment-dim); text-align:center; padding:0 4px;}
+  .level-card.locked{opacity:0.4;}
+  .level-card.locked .num{color:var(--parchment-dim);}
+  .campaign-blurb{font-size:11.5px; font-style:italic; color:var(--parchment-dim); line-height:1.4; margin:0 0 14px;}
+
+  /* ---------- Gameplay ---------- */
+  .hud{display:flex; gap:10px; margin-bottom:12px;}
+  .hud-box{flex:1; background:var(--panel); border:1px solid rgba(231,184,75,0.2); border-radius:12px; padding:9px 10px;}
+  .hud-box .k{font-size:9.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--parchment-dim);}
+  .hud-box .v{font-family:'Cinzel',serif; font-weight:700; font-size:17px; color:var(--gold-bright);}
+  .progress-outer{height:8px; border-radius:999px; background:rgba(0,0,0,0.35); overflow:hidden; margin-top:5px;}
+  .progress-inner{height:100%; background:linear-gradient(90deg, var(--gold), var(--gold-bright)); width:0%; transition:width .25s ease;}
+
+  .battle-scorebars{display:flex; flex-direction:column; gap:6px; margin-bottom:10px;}
+  .sb-row{display:flex; align-items:center; gap:8px;}
+  .sb-row .who{width:64px; font-size:11px; font-weight:700; flex-shrink:0;}
+  .sb-outer{flex:1; height:10px; border-radius:999px; background:rgba(0,0,0,0.35); overflow:hidden;}
+  .sb-inner{height:100%; width:0%; transition:width .3s ease;}
+  .sb-inner.you{background:linear-gradient(90deg, var(--emerald), #5FD8AE);}
+  .sb-inner.ai{background:linear-gradient(90deg, var(--crimson), var(--crimson-bright));}
+  .sb-num{width:38px; text-align:right; font-size:11px; font-weight:700;}
+
+  .board-wrap{
+    position:relative; width:100%; min-height:300px; margin:6px 0 14px;
+    background:
+      repeating-linear-gradient(120deg, rgba(231,184,75,0.05) 0 1px, transparent 1px 26px),
+      repeating-linear-gradient(60deg, rgba(231,184,75,0.05) 0 1px, transparent 1px 26px),
+      var(--panel);
+    border-radius:18px; border:1px solid rgba(231,184,75,0.22);
+    padding:6px; box-shadow:inset 0 0 30px rgba(0,0,0,0.4);
+  }
+  .board{position:relative; width:100%; height:100%;}
+  .tile{
+    position:absolute; display:flex; align-items:center; justify-content:center;
+    font-size:min(5.6vw, 24px);
+    background:linear-gradient(160deg, var(--panel-2), var(--void-2));
+    border:1.5px solid rgba(231,184,75,0.2);
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    /* position is set via the independent `translate` prop (JS); `scale` animates
+       separately here for pop/bounce effects without fighting that positioning. */
+    transition:translate .15s cubic-bezier(.34,1.9,.64,1), scale .15s cubic-bezier(.34,1.9,.64,1), opacity .12s ease;
+    will-change:translate;
+    touch-action:none;
+    user-select:none;
+  }
+  .tile.selected{box-shadow:0 0 0 2px var(--gold-bright) inset; background:linear-gradient(160deg, #3A2560, var(--panel-2));}
+  /* Hint: brightened, glowing and pulsing, so the suggested swap stands out
+     through the hexagon clip-path (a box-shadow would be clipped away). */
+  .tile.hint{
+    z-index:4;
+    filter:brightness(1.8) drop-shadow(0 0 9px var(--gold-bright));
+    animation:hintPulse .8s ease-in-out infinite;
+  }
+  @keyframes hintPulse{
+    0%,100%{ scale:1; }
+    50%{ scale:1.16; }
+  }
+  .tile.clearing{ animation:matchPop .18s ease-out forwards; }
+  @keyframes matchPop{
+    0%{ scale:1; filter:brightness(1); }
+    30%{ scale:1.4; filter:brightness(1.9); }
+    100%{ scale:0; opacity:0; }
+  }
+  .tile.spawning{ opacity:0; scale:0.3; }
+
+  .power-flash{
+    position:absolute; inset:0; border-radius:14px; pointer-events:none; z-index:8;
+    background:radial-gradient(circle, rgba(247,215,122,0.6), transparent 70%);
+    opacity:0; transition:opacity .35s ease;
+  }
+  @keyframes boardShake{
+    0%,100%{ translate:0 0; }
+    20%{ translate:-6px 3px; } 40%{ translate:5px -4px; }
+    60%{ translate:-4px 2px; } 80%{ translate:3px -2px; }
+  }
+  .board-wrap.shake{ animation:boardShake .32s ease; }
+
+  .combo-burst{
+    position:absolute; left:50%; top:50%; translate:-50% -50%; scale:0.3;
+    font-family:'Cinzel',serif; font-weight:900; font-size:26px; color:var(--gold-bright);
+    text-shadow:0 0 20px rgba(247,215,122,0.8), 0 4px 10px rgba(0,0,0,0.6);
+    opacity:0; pointer-events:none; z-index:10; text-align:center; white-space:nowrap;
+    transition:scale .3s cubic-bezier(.34,2.2,.64,1), opacity .3s ease;
+  }
+  .combo-burst.pop{ scale:1; opacity:1; }
+  .combo-burst.fade{ scale:1.15; opacity:0; }
+
+  .power-row{display:flex; align-items:center; gap:14px; margin-top:auto;}
+  .power-ring-btn{
+    position:relative; width:74px; height:74px; flex-shrink:0; border-radius:50%; background:transparent;
+  }
+  .power-ring-btn svg{width:100%; height:100%; transform:rotate(-90deg);}
+  .power-ring-btn .bg{fill:none; stroke:rgba(255,255,255,0.08); stroke-width:8;}
+  .power-ring-btn .fill{fill:none; stroke:var(--gold); stroke-width:8; stroke-linecap:round; transition:stroke-dashoffset .3s ease;}
+  .power-ring-btn .center-icon{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:26px;
+  }
+  .power-ring-btn.ready .fill{stroke:var(--gold-bright); filter:drop-shadow(0 0 6px var(--gold-bright));}
+  .power-ring-btn.ready{animation:pulseRing 1.1s ease-in-out infinite;}
+  @keyframes pulseRing{0%,100%{filter:drop-shadow(0 0 0 rgba(247,215,122,0));} 50%{filter:drop-shadow(0 0 14px rgba(247,215,122,0.55));}}
+  .power-info{flex:1;}
+  .power-info .pname{font-family:'Cinzel',serif; font-weight:700; font-size:13.5px; color:var(--gold-bright);}
+  .power-info .pdesc{font-size:11px; color:var(--parchment-dim); margin-top:2px;}
+  .power-info .pstate{font-size:10.5px; margin-top:4px; font-weight:800; letter-spacing:0.05em; color:var(--parchment-dim);}
+  .power-ring-btn.ready .pstate-tag{color:var(--gold-bright);}
+
+  .hint-btn{
+    flex-shrink:0; display:flex; align-items:center; gap:6px;
+    padding:11px 13px; border-radius:12px; font-weight:800; font-size:13px;
+    font-family:'Cinzel',serif; color:#2A1B08;
+    background:linear-gradient(160deg, var(--gold-bright), var(--gold));
+    box-shadow:0 8px 20px var(--shadow);
+  }
+  .hint-btn .emo{font-size:17px;}
+
+  /* ---------- Results ---------- */
+  .results-wrap{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;}
+  .results-wrap .banner{font-size:44px; margin-bottom:6px;}
+  .results-wrap h2{font-size:26px; margin:0 0 4px; color:var(--gold-bright);}
+  .results-wrap .stars{font-size:30px; line-height:1.1; letter-spacing:4px; margin-bottom:10px; color:var(--gold-bright);}
+  .results-wrap .stars[data-stars="0"]{color:var(--parchment-dim);}
+  .results-wrap .sub{color:var(--parchment-dim); font-size:13px; margin-bottom:20px;}
+  .results-stats{display:flex; gap:10px; margin-bottom:26px;}
+  .results-stats .stat{background:var(--panel); border:1px solid rgba(231,184,75,0.2); border-radius:12px; padding:12px 16px;}
+  .results-stats .stat .v{font-family:'Cinzel',serif; font-weight:800; font-size:18px; color:var(--gold-bright);}
+  .results-stats .stat .k{font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--parchment-dim);}
+  .results-actions{display:flex; flex-direction:column; gap:10px; width:100%;}
+
+  .btn{
+    padding:14px; border-radius:12px; font-weight:800; font-family:'Cinzel',serif; font-size:14.5px; text-align:center;
+  }
+  .btn.gold{background:linear-gradient(160deg, var(--gold-bright), var(--gold)); color:#2A1B08;}
+  .btn.ghost{background:var(--panel); color:var(--parchment); border:1px solid rgba(231,184,75,0.3);}
+
+  .toast{
+    position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px);
+    background:var(--panel); border:1px solid var(--gold); color:var(--parchment);
+    padding:10px 18px; border-radius:999px; font-size:12.5px; font-weight:600;
+    opacity:0; transition:all .25s ease; pointer-events:none; z-index:50; max-width:88%; text-align:center;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+  }
+
+  .score-pop{
+    position:absolute; transform:translate(-50%,-50%); font-family:'Cinzel',serif; font-weight:800;
+    font-size:15px; color:var(--gold-bright); text-shadow:0 2px 6px rgba(0,0,0,0.75);
+    pointer-events:none; opacity:1; transition:transform .8s ease, opacity .8s ease; z-index:5;
+  }
+  .score-pop.rise{ transform:translate(-50%,-170%); opacity:0; }
+
+  .story-banner{
+    background:var(--panel); border:1px solid rgba(231,184,75,0.25); border-radius:12px;
+    padding:10px 12px; margin-bottom:10px; transition:opacity .6s ease;
+  }
+  .story-banner.fade{ opacity:0; }
+  .story-banner .chapter{
+    font-family:'Cinzel',serif; font-weight:700; font-size:12px; color:var(--gold-bright);
+    text-transform:uppercase; letter-spacing:0.05em;
+  }
+  .story-banner .blurb{font-size:11.5px; color:var(--parchment-dim); margin-top:3px; line-height:1.4; font-style:italic;}
+
+  /* ---------- Debug panel (?debug=1) ----------
+     A dev-only corner panel, built by JS and only when the query flag is on.
+     It is deliberately tiny, and the game is given matching bottom padding
+     (set from the panel's own height) so it never sits over the board. */
+  #debug-panel{
+    position:fixed; right:4px; bottom:4px; z-index:40;
+    width:132px; max-width:38vw; padding:5px; border-radius:8px;
+    display:flex; flex-direction:column; gap:3px;
+    background:rgba(10,6,20,0.92); border:1px dashed rgba(231,184,75,0.55);
+    color:var(--parchment); font:600 9px/1.25 'Inter',system-ui,sans-serif;
+  }
+  #debug-panel .dbg-title{ font-family:'Cinzel',serif; font-size:9px; color:var(--gold-bright); letter-spacing:.06em; }
+  #debug-panel .dbg-row{ display:flex; align-items:center; gap:3px; }
+  #debug-panel label{ font-size:8px; text-transform:uppercase; letter-spacing:.05em; color:var(--parchment-dim); }
+  #debug-panel input, #debug-panel select{
+    flex:1; min-width:0; padding:2px; font:inherit; color:var(--parchment);
+    background:var(--void-2); border:1px solid rgba(231,184,75,0.35); border-radius:4px;
+  }
+  #debug-panel button{
+    padding:3px 4px; font:inherit; border-radius:4px;
+    background:var(--panel-2); border:1px solid rgba(231,184,75,0.35); color:var(--parchment);
+  }
+  #debug-panel button:active{ scale:0.94; }
+  #debug-panel #debug-seed{ font-family:'Cinzel',serif; font-size:10px; color:var(--gold-bright); }
+  #debug-panel #debug-progress{
+    margin:0; padding:3px; max-height:44px; overflow:auto;
+    background:var(--void); border:1px solid rgba(231,184,75,0.2); border-radius:4px;
+    color:var(--parchment-dim); font:500 8px/1.3 ui-monospace, Menlo, Consolas, monospace;
+    white-space:pre-wrap; word-break:break-all;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HOME -->
+  <section class="screen active" id="screen-home">
+    <div class="topbar">
+      <button class="backbtn" id="sound-toggle" aria-label="Toggle sound">🔊</button>
+      <div class="gemcount">💎 <span id="home-gems">500</span></div>
+    </div>
+    <div class="home-hero">
+      <div class="crest">🏛️</div>
+      <h1>Match Legends</h1>
+      <p>Legends never miss a match</p>
+      <p class="prologue">The Crown of the Arena lies shattered into six shards. Six legends rise to reclaim them — one match at a time.</p>
+    </div>
+    <div class="avatar-strip" id="home-avatar-strip" tabindex="0" role="button" aria-label="Change legend">
+      <div class="icon" id="home-avatar-icon">🤺</div>
+      <div class="info">
+        <div class="label">Your Legend</div>
+        <div class="name" id="home-avatar-name">Marcus the Gladiator</div>
+      </div>
+      <div class="change">Change</div>
+    </div>
+    <!-- .menu-btn sets display:flex, which beats the [hidden] UA rule, so this
+         button is shown/hidden with an inline display instead. -->
+    <button class="menu-btn resume" id="btn-continue" style="display:none;">
+      <span class="emo">▶️</span>
+      <span id="btn-continue-label">Continue<small>Resume your unfinished trial</small></span>
+    </button>
+    <button class="menu-btn primary" id="btn-goto-levels">
+      <span class="emo">⚔️</span>
+      <span>Solo Campaign<small>Beat targets, climb the ranks</small></span>
+    </button>
+    <button class="menu-btn secondary" id="btn-goto-battle">
+      <span class="emo">🔥</span>
+      <span>Battle Arena<small>Race an AI legend, 60 seconds</small></span>
+    </button>
+  </section>
+
+  <!-- AVATAR SELECT -->
+  <section class="screen" id="screen-avatars">
+    <div class="topbar">
+      <button class="backbtn" data-back="screen-home">←</button>
+      <div class="screen-title">Choose Your Legend</div>
+      <div class="gemcount">💎 <span id="avsel-gems">500</span></div>
+    </div>
+    <div class="avatar-grid" id="avatar-grid"></div>
+  </section>
+
+  <!-- LEVEL SELECT -->
+  <section class="screen" id="screen-levels">
+    <div class="topbar">
+      <button class="backbtn" data-back="screen-home">←</button>
+      <div class="screen-title">Solo Campaign</div>
+      <div class="gemcount">💎 <span id="lvlsel-gems">500</span></div>
+    </div>
+    <p class="campaign-blurb">Reclaim the six shattered shards of the Arena Crown, one trial at a time.</p>
+    <div class="level-grid" id="level-grid"></div>
+  </section>
+
+  <!-- GAMEPLAY -->
+  <section class="screen" id="screen-game">
+    <div class="topbar">
+      <button class="backbtn" id="btn-game-back">←</button>
+      <div class="screen-title" id="game-title">Level 1</div>
+      <div class="gemcount">💎 <span id="game-gems">500</span></div>
+    </div>
+
+    <div class="story-banner" id="story-banner" style="display:none;">
+      <div class="chapter" id="story-chapter"></div>
+      <div class="blurb" id="story-blurb"></div>
+    </div>
+
+    <div id="solo-hud" class="hud">
+      <div class="hud-box">
+        <div class="k">Score / Target</div>
+        <div class="v" id="solo-score">0 / 1800</div>
+        <div class="progress-outer"><div class="progress-inner" id="solo-progress"></div></div>
+      </div>
+      <div class="hud-box">
+        <div class="k">Moves Left</div>
+        <div class="v" id="solo-moves">20</div>
+      </div>
+    </div>
+
+    <div id="battle-hud" style="display:none;">
+      <div class="battle-scorebars">
+        <div class="sb-row">
+          <div class="who">You</div>
+          <div class="sb-outer"><div class="sb-inner you" id="battle-you-bar"></div></div>
+          <div class="sb-num" id="battle-you-score">0</div>
+        </div>
+        <div class="sb-row">
+          <div class="who" id="battle-ai-name">AI</div>
+          <div class="sb-outer"><div class="sb-inner ai" id="battle-ai-bar"></div></div>
+          <div class="sb-num" id="battle-ai-score">0</div>
+        </div>
+      </div>
+      <div class="hud" style="margin-bottom:8px;">
+        <div class="hud-box">
+          <div class="k">Time Left</div>
+          <div class="v" id="battle-timer">60s</div>
+        </div>
+        <div class="hud-box">
+          <div class="k">Target</div>
+          <div class="v" id="battle-target">4000</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="board-wrap"><div class="board" id="board"></div></div>
+
+    <div class="power-row">
+      <button class="power-ring-btn" id="power-btn">
+        <svg viewBox="0 0 100 100">
+          <circle class="bg" cx="50" cy="50" r="42"></circle>
+          <circle class="fill" cx="50" cy="50" r="42" id="power-ring-fill"></circle>
+        </svg>
+        <div class="center-icon" id="power-icon">🤺</div>
+      </button>
+      <div class="power-info">
+        <div class="pname" id="power-name">Arena Smash</div>
+        <div class="pdesc" id="power-desc">Clear an entire row</div>
+        <div class="pstate" id="power-state">CHARGING · 0/18</div>
+      </div>
+      <button class="hint-btn" id="hint-btn" aria-label="Show a hint"><span class="emo">💡</span><span>Hint</span></button>
+    </div>
+  </section>
+
+  <!-- RESULTS -->
+  <section class="screen" id="screen-results">
+    <div class="results-wrap">
+      <div class="banner" id="res-banner">🏆</div>
+      <h2 id="res-title">Victory!</h2>
+      <div class="stars" id="res-stars" data-stars="0" aria-label="Star rating">☆☆☆</div>
+      <div class="sub" id="res-sub">You crushed the target.</div>
+      <div class="results-stats">
+        <div class="stat"><div class="v" id="res-score">0</div><div class="k">Score</div></div>
+        <div class="stat"><div class="v" id="res-gems">+0</div><div class="k">Gems</div></div>
+      </div>
+      <div class="results-actions">
+        <button class="btn gold" id="res-primary">Next Level</button>
+        <button class="btn ghost" id="res-home">Back to Menu</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="js/match-logic.js"></script>
+<script>
+'use strict';
+
+/* =========================================================
+   DATA
+========================================================= */
+const TILE_ICONS = { sword:'⚔️', shield:'🛡️', urn:'🏺', crown:'👑', flame:'🔥', gem:'💎' };
+// Pure game logic (hex grid, matching, gravity, power targeting) lives in
+// www/js/match-logic.js so it can be unit tested.
+const {
+  BASE_POINTS, TYPES, hexKey, HEX_CELLS, QCOLUMNS_BY_Q,
+  isHexAdjacent, swapHex, createRng,
+  findMatches, hasPossibleMove, createPlayableBoard, computeCollapse, findHint, starsForScore,
+} = window.MatchLogic;
+
+const AVATARS = [
+  { id:'gladiator', name:'Marcus the Gladiator', icon:'🤺', free:true,
+    powerName:'Arena Smash', powerDesc:'Clears a hex line, then empowers your next 3 matches (+50% score)', charge:18, effect:'clearRow',
+    lore:'Once undefeated in the Coliseum, Marcus fights now to reclaim what he lost.' },
+  { id:'viking', name:'Astrid Frostbane', icon:'🪓', free:true,
+    powerName:'Berserker Fury', powerDesc:'Clears a hex line and doubles power charge for your next 4 matches', charge:18, effect:'clearColumn',
+    lore:'Astrid crossed the frozen wastes chasing a song only she can hear.' },
+  { id:'shaman', name:'Old Maren', icon:'🌿', free:true,
+    powerName:"Nature's Gift", powerDesc:'Reshapes 4 hexes into a match and restores 2 moves', charge:15, effect:'convertTiles',
+    lore:'Old Maren speaks with roots older than any kingdom.' },
+  { id:'pharaoh', name:'Queen Nefret', icon:'🏺', free:false, price:'$2.00',
+    powerName:'Curse of Ra', powerDesc:'Clears every hex of one type and plunders +15 gems', charge:20, effect:'clearType',
+    lore:"Queen Nefret's tomb was never meant to be reopened." },
+  { id:'odin', name:'Odin Stormfather', icon:'🔱', free:false, price:'$2.00',
+    powerName:'Thunder Strike', powerDesc:'Clears a hex cluster, chaining lightning to matching tiles nearby', charge:16, effect:'clearArea',
+    lore:"Odin traded an eye for foresight — and still didn't see this coming." },
+  { id:'spartan', name:'King Leonidas', icon:'👑', free:false, price:'$2.00',
+    powerName:'This. Is. SPARTA!', powerDesc:'+5 moves instantly and 2x score for your next 5 matches', charge:14, effect:'extraMoves',
+    lore:'Leonidas never learned how to retreat.' },
+];
+
+const LEVELS = [
+  { id:1, target:1800, moves:20, story:{ place:'The Cracked Coliseum', blurb:'Dust and silence. The first shard rests where Marcus once triumphed a hundred times.' } },
+  { id:2, target:2600, moves:20, story:{ place:'The Frozen Hollow', blurb:"Astrid's frost-song calls — a shard lies woken beneath ancient ice." } },
+  { id:3, target:3500, moves:18, story:{ place:'The Whispering Grove', blurb:'Old Maren feels the grove stir — the third shard hums between the roots.' } },
+  { id:4, target:4800, moves:18, story:{ place:'The Sunken Tombs', blurb:"Queen Nefret's curse guards the fourth shard from those unworthy." } },
+  { id:5, target:6200, moves:16, story:{ place:'The Storm Reach', blurb:"Thunder rolls over Odin's reach — the fifth shard rides the lightning." } },
+  { id:6, target:8000, moves:16, story:{ place:'The Last Stand', blurb:"Leonidas plants his spear. The final shard — and the Crown's fate — awaits." } },
+];
+
+const AI_NAMES = [
+  { name:'Jarl Bjorn', icon:'🪓' }, { name:'Centurion Gaius', icon:'🛡️' },
+  { name:'Priestess Isis', icon:'🏺' }, { name:'Ragnar the Bold', icon:'🔱' },
+];
+
+const BATTLE_TARGET = 4000;
+const BATTLE_SECONDS = 60;
+
+/* =========================================================
+   SOUND + HAPTICS (synthesized, no asset files needed)
+========================================================= */
+const Sound = {
+  ctx: null,
+  enabled: true,
+  init(){
+    if (this.ctx) return;
+    try{ this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){}
+  },
+  beep(freq, dur, type, vol, delay){
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+    const t0 = this.ctx.currentTime + (delay||0);
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(vol||0.18, t0+0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0+dur);
+    osc.connect(gain).connect(this.ctx.destination);
+    osc.start(t0); osc.stop(t0+dur+0.02);
+  },
+  match(combo){ this.beep(440 + Math.min(combo,6)*60, 0.16, 'triangle', 0.16); },
+  swapInvalid(){ this.beep(160, 0.12, 'square', 0.12); },
+  power(){
+    this.beep(220, 0.12, 'sawtooth', 0.2);
+    this.beep(440, 0.14, 'sawtooth', 0.18, 0.08);
+    this.beep(660, 0.18, 'sawtooth', 0.16, 0.16);
+  },
+  victory(){ [523,659,784,1046].forEach((f,i)=> this.beep(f, 0.22, 'triangle', 0.2, i*0.11)); },
+  defeat(){ [392,330,262].forEach((f,i)=> this.beep(f, 0.3, 'sine', 0.18, i*0.14)); }
+};
+function vibrate(pattern){ try{ if (navigator.vibrate) navigator.vibrate(pattern); }catch(e){} }
+
+/* =========================================================
+   BACKGROUND MUSIC — generative ambient pad loop (no audio
+   files; scheduled on the shared Web Audio context)
+========================================================= */
+const Music = {
+  master: null, filter: null, playing: false, timer: null,
+  nextTime: 0, chordIdx: 0,
+  volume: 0.09, lookahead: 200, scheduleAhead: 0.6, chordDur: 2.1,
+  // i - VI - III - VII in A minor: an easy, unmistakably "epic legends" loop
+  chords: [
+    [220.00, 261.63, 329.63], // Am
+    [174.61, 220.00, 261.63], // F
+    [261.63, 329.63, 392.00], // C
+    [196.00, 246.94, 293.66], // G
+  ],
+  ensure(){
+    Sound.init();
+    if (!Sound.ctx || this.master) return;
+    this.master = Sound.ctx.createGain();
+    this.master.gain.value = 0;
+    this.filter = Sound.ctx.createBiquadFilter();
+    this.filter.type = 'lowpass';
+    this.filter.frequency.value = 1100;
+    this.master.connect(this.filter).connect(Sound.ctx.destination);
+  },
+  start(){
+    this.ensure();
+    if (!Sound.ctx || this.playing) return;
+    if (Sound.ctx.state === 'suspended') Sound.ctx.resume().catch(()=>{});
+    this.playing = true;
+    this.nextTime = Sound.ctx.currentTime + 0.2;
+    this.chordIdx = 0;
+    this.timer = setInterval(()=> this.tick(), this.lookahead);
+    this.tick();
+    syncMusicMute();
+  },
+  tick(){
+    while (this.nextTime < Sound.ctx.currentTime + this.scheduleAhead){
+      const chord = this.chords[this.chordIdx];
+      this.playChord(chord, this.nextTime, this.chordDur);
+      this.playPulse(this.nextTime, 0.16);
+      this.playPulse(this.nextTime + this.chordDur/2, 0.09);
+      if (Math.random() < 0.55) this.playSparkle(chord, this.nextTime, this.chordDur);
+      this.chordIdx = (this.chordIdx+1) % this.chords.length;
+      this.nextTime += this.chordDur;
+    }
+  },
+  playPulse(time, vol){
+    const osc = Sound.ctx.createOscillator();
+    const g = Sound.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(92, time);
+    g.gain.setValueAtTime(0, time);
+    g.gain.linearRampToValueAtTime(vol, time+0.015);
+    g.gain.exponentialRampToValueAtTime(0.001, time+0.3);
+    osc.connect(g).connect(this.master);
+    osc.start(time); osc.stop(time+0.32);
+  },
+  playChord(freqs, time, dur){
+    freqs.forEach((f,i)=>{
+      [1,-1].forEach(sign=>{
+        const osc = Sound.ctx.createOscillator();
+        const g = Sound.ctx.createGain();
+        osc.type = i===0 ? 'triangle' : 'sine';
+        osc.frequency.value = f;
+        osc.detune.value = sign*4;
+        g.gain.setValueAtTime(0, time);
+        g.gain.linearRampToValueAtTime(0.22, time+dur*0.35);
+        g.gain.linearRampToValueAtTime(0, time+dur);
+        osc.connect(g).connect(this.master);
+        osc.start(time); osc.stop(time+dur+0.05);
+      });
+    });
+  },
+  playSparkle(freqs, chordStart, dur){
+    const f = freqs[Math.floor(Math.random()*freqs.length)] * 2;
+    const t = chordStart + dur*(0.4 + Math.random()*0.5);
+    const osc = Sound.ctx.createOscillator();
+    const g = Sound.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = f;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.12, t+0.05);
+    g.gain.exponentialRampToValueAtTime(0.001, t+1.2);
+    osc.connect(g).connect(this.master);
+    osc.start(t); osc.stop(t+1.3);
+  },
+  setMuted(muted){
+    if (!this.master) return;
+    const target = muted ? 0 : this.volume;
+    this.master.gain.cancelScheduledValues(Sound.ctx.currentTime);
+    this.master.gain.setTargetAtTime(target, Sound.ctx.currentTime, 0.6);
+  }
+};
+function syncMusicMute(){ Music.setMuted(document.hidden || !Sound.enabled); }
+document.addEventListener('visibilitychange', syncMusicMute);
+
+/* =========================================================
+   STORAGE (best-effort; native storage first, localStorage second)
+   window.storage is the Capacitor plugin and only exists in the
+   installed app. In a plain browser it is absent, so progress is
+   kept in localStorage instead -- that way gems, unlocked legends,
+   the chosen legend and unlocked levels survive a reload either way.
+========================================================= */
+const Storage = {
+  async load(key, fallback){
+    if (window.storage){
+      try{
+        const res = await window.storage.get(key);
+        return res ? JSON.parse(res.value) : fallback;
+      }catch(e){ /* native storage unavailable; fall back to localStorage */ }
+    }
+    try{
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    }catch(e){ /* no saved value yet, or storage unavailable */ }
+    return fallback;
+  },
+  async save(key, value){
+    const json = JSON.stringify(value);
+    if (window.storage){
+      try{ await window.storage.set(key, json); return; }
+      catch(e){ /* native storage unavailable; fall back to localStorage */ }
+    }
+    try{ localStorage.setItem(key, json); }catch(e){ /* non-fatal */ }
+  },
+  async clear(key){
+    if (window.storage){
+      try{ await window.storage.remove(key); return; }
+      catch(e){ /* native storage unavailable; fall back to localStorage */ }
+    }
+    try{ localStorage.removeItem(key); }catch(e){ /* non-fatal */ }
+  }
+};
+
+/* =========================================================
+   APP STATE
+========================================================= */
+const PROGRESS_KEY = 'ml_progress';
+
+// A brand-new player: what the game starts from, and what the debug panel
+// resets it to when the saved progress is thrown away.
+function newPlayerState(){
+  return {
+    gems: 500,
+    unlocked: ['gladiator','viking','shaman'],
+    selectedAvatarId: 'gladiator',
+    maxLevelUnlocked: 1,
+  };
+}
+const appState = newPlayerState();
+
+function selectedAvatar(){ return AVATARS.find(a => a.id === appState.selectedAvatarId); }
+
+async function persistProgress(){
+  await Storage.save(PROGRESS_KEY, {
+    gems: appState.gems, unlocked: appState.unlocked,
+    selectedAvatarId: appState.selectedAvatarId, maxLevelUnlocked: appState.maxLevelUnlocked
+  });
+  debugSync();
+}
+
+/* =========================================================
+   RENDERING HELPERS
+========================================================= */
+const boardEl = document.getElementById('board');
+const boardWrapEl = document.querySelector('.board-wrap');
+let hexSize = 0, hexOriginX = 0, hexOriginY = 0;
+
+// Unit (size=1) bounding box of the whole hex shape, computed once — used to
+// fit + center the board regardless of container size.
+const HEX_UNIT_BOUNDS = (function(){
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  HEX_CELLS.forEach(c=>{
+    const x = Math.sqrt(3)*c.q + Math.sqrt(3)/2*c.r;
+    const y = 1.5*c.r;
+    minX=Math.min(minX,x); maxX=Math.max(maxX,x);
+    minY=Math.min(minY,y); maxY=Math.max(maxY,y);
+  });
+  return { minX, maxX, minY, maxY };
+})();
+
+function recalcHexSize(){
+  const availW = boardEl.clientWidth;
+  const unitW = (HEX_UNIT_BOUNDS.maxX - HEX_UNIT_BOUNDS.minX) + Math.sqrt(3);
+  const unitH = (HEX_UNIT_BOUNDS.maxY - HEX_UNIT_BOUNDS.minY) + 2;
+  hexSize = availW / unitW;
+  const shapeW = (HEX_UNIT_BOUNDS.maxX - HEX_UNIT_BOUNDS.minX) * hexSize + Math.sqrt(3)*hexSize;
+  const shapeH = (HEX_UNIT_BOUNDS.maxY - HEX_UNIT_BOUNDS.minY) * hexSize + 2*hexSize;
+  boardWrapEl.style.height = Math.ceil(shapeH + 12) + 'px'; // +12 matches board-wrap's 6px padding on each side
+  hexOriginX = -HEX_UNIT_BOUNDS.minX*hexSize + Math.sqrt(3)/2*hexSize;
+  hexOriginY = -HEX_UNIT_BOUNDS.minY*hexSize + hexSize;
+}
+function hexPixelCenter(q,r){
+  return {
+    x: hexOriginX + hexSize*(Math.sqrt(3)*q + Math.sqrt(3)/2*r),
+    y: hexOriginY + hexSize*1.5*r
+  };
+}
+function tileEl(type, q, r, key){
+  const d = document.createElement('div');
+  d.className = 'tile';
+  d.textContent = TILE_ICONS[type];
+  d.dataset.q = q; d.dataset.r = r; d.dataset.key = key;
+  positionHexTile(d, q, r);
+  return d;
+}
+function positionHexTile(el, q, r){
+  const { x, y } = hexPixelCenter(q, r);
+  const w = Math.sqrt(3)*hexSize, h = 2*hexSize;
+  el.style.width = w + 'px';
+  el.style.height = h + 'px';
+  el.style.translate = `${x - w/2}px ${y - h/2}px`;
+}
+function sleep(ms){ return new Promise(res=>setTimeout(res,ms)); }
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=>t.classList.remove('show'), 1600);
+}
+function spawnComboBurst(text){
+  const el = document.createElement('div');
+  el.className = 'combo-burst';
+  el.textContent = text;
+  boardEl.appendChild(el);
+  requestAnimationFrame(()=> el.classList.add('pop'));
+  setTimeout(()=> el.classList.add('fade'), 380);
+  setTimeout(()=> el.remove(), 680);
+}
+function screenShake(){
+  boardWrapEl.classList.remove('shake');
+  void boardWrapEl.offsetWidth;
+  boardWrapEl.classList.add('shake');
+}
+function powerFlash(){
+  const flash = document.createElement('div');
+  flash.className = 'power-flash';
+  boardEl.appendChild(flash);
+  requestAnimationFrame(()=>{ flash.style.opacity = '1'; });
+  setTimeout(()=>{ flash.style.opacity = '0'; }, 90);
+  setTimeout(()=> flash.remove(), 500);
+}
+function showStoryBanner(story){
+  const banner = document.getElementById('story-banner');
+  if (!story){ banner.style.display = 'none'; return; }
+  banner.style.display = 'block';
+  banner.classList.remove('fade');
+  document.getElementById('story-chapter').textContent = story.chapter;
+  document.getElementById('story-blurb').textContent = story.blurb;
+  clearTimeout(showStoryBanner._t);
+  showStoryBanner._t = setTimeout(()=> banner.classList.add('fade'), 4500);
+}
+function spawnScorePopup(matchedSet, points, combo){
+  if (!matchedSet.size) return;
+  let sumX=0, sumY=0, n=0;
+  matchedSet.forEach(key=>{
+    const [q,r] = key.split(',').map(Number);
+    const p = hexPixelCenter(q,r);
+    sumX += p.x; sumY += p.y; n++;
+  });
+  const el = document.createElement('div');
+  el.className = 'score-pop';
+  el.textContent = '+'+points + (combo>1 ? ' ×'+combo : '');
+  el.style.left = (sumX/n)+'px';
+  el.style.top = (sumY/n)+'px';
+  boardEl.appendChild(el);
+  requestAnimationFrame(()=> el.classList.add('rise'));
+  setTimeout(()=> el.remove(), 850);
+}
+
+/* =========================================================
+   GAME SESSION
+========================================================= */
+let session = null; // active game session object
+// Read-only hook for the automated tests (tests/smoke, tests/tasks).
+window.__ML_TEST__ = { session: () => session, appState: () => appState };
+let tileKeySeq = 1;
+
+/* =========================================================
+   SEEDED LEVELS
+   Every board is dealt from a seed through MatchLogic.createRng,
+   so the same seed always reproduces the same level -- which is what
+   makes a bug report ("level 3 was unfair") reproducible. The seed is
+   random unless one has been pinned (the ?seed= parameter or the debug
+   panel); the dealt seed is kept on the session.
+   ========================================================= */
+let pinnedSeed = null; // seed every new board is dealt from; null = deal a random one
+function randomSeed(){ return Math.floor(Math.random() * 2147483647); }
+function dealSeed(){ return pinnedSeed === null ? randomSeed() : pinnedSeed; }
+
+function freshRenderBoard(board){
+  boardEl.innerHTML = '';
+  recalcHexSize();
+  const map = {};
+  HEX_CELLS.forEach(c=>{
+    const key = 'k'+(tileKeySeq++);
+    const el = tileEl(board[hexKey(c.q,c.r)], c.q, c.r, key);
+    boardEl.appendChild(el);
+    map[hexKey(c.q,c.r)] = el;
+  });
+  return map;
+}
+
+/* =========================================================
+   UNFINISHED LEVEL RESUME (Storage key 'ml_session')
+   The solo level being played is written to storage after
+   every move, so closing the game mid-level costs nothing: the
+   home screen offers a Continue button that picks the level up
+   exactly where it was left. A level that ends (win or loss)
+   clears the record.
+========================================================= */
+const SESSION_KEY = 'ml_session';
+let savedSession = null; // the record the home screen's Continue button offers
+
+// A saved record is only resumable if it still describes a whole, playable level.
+function isResumableSession(rec){
+  if (!rec || typeof rec !== 'object') return false;
+  if (!LEVELS.some(l => l.id === rec.levelId)) return false;
+  if (!rec.board || typeof rec.board !== 'object') return false;
+  if (HEX_CELLS.some(c => !TYPES.includes(rec.board[hexKey(c.q,c.r)]))) return false;
+  const count = n => Number.isFinite(n) && n >= 0;
+  return count(rec.score) && count(rec.movesLeft) && count(rec.charge);
+}
+
+// Write the level currently being played to storage (and to the home button).
+function saveSoloSession(){
+  if (!session || session.mode !== 'solo') return;
+  savedSession = {
+    levelId: session.level.id,
+    seed: session.seed,
+    board: { ...session.board },
+    score: session.score,
+    movesLeft: session.movesLeft,
+    charge: session.charge,
+  };
+  Storage.save(SESSION_KEY, savedSession);
+  updateContinueButton();
+}
+
+// The level is over (or was never resumable): nothing left to continue.
+function clearSavedSession(){
+  savedSession = null;
+  Storage.clear(SESSION_KEY);
+  updateContinueButton();
+}
+
+// Show the Continue button only while there is a level to resume, named after it.
+function updateContinueButton(){
+  const btn = document.getElementById('btn-continue');
+  const lvl = savedSession ? LEVELS.find(l => l.id === savedSession.levelId) : null;
+  if (!lvl){ btn.style.display = 'none'; return; }
+  document.getElementById('btn-continue-label').innerHTML =
+    `Continue Level ${lvl.id}<small>${lvl.story.place}</small>`;
+  btn.style.display = 'flex';
+}
+
+// Pick the saved level back up at startup; anything unusable is dropped.
+async function loadSavedSession(){
+  const rec = await Storage.load(SESSION_KEY, null);
+  savedSession = isResumableSession(rec) ? rec : null;
+  if (rec && !savedSession) Storage.clear(SESSION_KEY);
+  updateContinueButton();
+}
+
+// Begin a solo level. `saved` is a record from 'ml_session': it resumes the
+// interrupted attempt exactly as it was left; without one a fresh board is dealt
+// from `seed`, or from the pinned/random seed when none is given.
+function startSoloLevel(levelId, saved, seed){
+  const lvl = LEVELS.find(l=>l.id===levelId);
+  if (!lvl) return;
+  const resumed = isResumableSession(saved) && saved.levelId === lvl.id;
+  const levelSeed = resumed
+    ? (Number.isFinite(saved.seed) ? saved.seed : dealSeed())
+    : (Number.isFinite(seed) ? seed : dealSeed());
+  const chapterTitle = `Chapter ${lvl.id}: ${lvl.story.place}`;
+  session = {
+    mode:'solo', level: lvl, seed: levelSeed,
+    board: resumed ? { ...saved.board } : createPlayableBoard(createRng(levelSeed)),
+    score: resumed ? saved.score : 0,
+    movesLeft: resumed ? saved.movesLeft : lvl.moves,
+    charge: resumed ? saved.charge : 0,
+    elMap:null, busy:false, selected:null,
+    scoreBuffUses:0, scoreBuffMult:1, chargeBuffUses:0, chargeBuffMult:1
+  };
+  document.getElementById('solo-hud').style.display = 'flex';
+  document.getElementById('battle-hud').style.display = 'none';
+  document.getElementById('game-title').textContent = chapterTitle;
+  showStoryBanner({ chapter: chapterTitle, blurb: lvl.story.blurb });
+  goto('screen-game');
+  requestAnimationFrame(()=>{
+    session.elMap = freshRenderBoard(session.board);
+    bindBoardEvents();
+    updateSoloHud();
+    updatePowerUI();
+  });
+  saveSoloSession();
+}
+
+function startBattle(){
+  const opp = AI_NAMES[Math.floor(Math.random()*AI_NAMES.length)];
+  const seed = dealSeed();
+  session = {
+    mode:'battle', seed, board:createPlayableBoard(createRng(seed)), score:0, aiScore:0, timeLeft:BATTLE_SECONDS,
+    charge:0, elMap:null, busy:false, selected:null, opp,
+    aiTimer:null, clockTimer:null, ended:false,
+    scoreBuffUses:0, scoreBuffMult:1, chargeBuffUses:0, chargeBuffMult:1
+  };
+  document.getElementById('solo-hud').style.display = 'none';
+  document.getElementById('battle-hud').style.display = 'block';
+  document.getElementById('game-title').textContent = 'Battle Arena';
+  document.getElementById('battle-ai-name').textContent = opp.icon + ' ' + opp.name;
+  document.getElementById('battle-target').textContent = BATTLE_TARGET;
+  showStoryBanner(null);
+  goto('screen-game');
+  requestAnimationFrame(()=> showToast(`${opp.icon} ${opp.name} enters the arena!`));
+  requestAnimationFrame(()=>{
+    session.elMap = freshRenderBoard(session.board);
+    bindBoardEvents();
+    updateBattleHud();
+    updatePowerUI();
+    session.clockTimer = setInterval(battleTick, 1000);
+    scheduleAiTick();
+  });
+}
+
+function scheduleAiTick(){
+  const delay = 1100 + Math.random()*900;
+  session.aiTimer = setTimeout(()=>{
+    if (!session || session.mode!=='battle' || session.ended) return;
+    const burst = Math.random() < 0.18;
+    const gain = burst ? (200 + Math.floor(Math.random()*150)) : (55 + Math.floor(Math.random()*100));
+    session.aiScore += gain;
+    updateBattleHud();
+    if (session.aiScore >= BATTLE_TARGET) endBattle(false);
+    else scheduleAiTick();
+  }, delay);
+}
+function battleTick(){
+  if (!session || session.ended) return;
+  session.timeLeft -= 1;
+  updateBattleHud();
+  if (session.timeLeft <= 0) endBattle(session.score >= session.aiScore);
+}
+function endBattle(playerWon){
+  if (!session || session.ended) return;
+  session.ended = true;
+  clearInterval(session.clockTimer);
+  clearTimeout(session.aiTimer);
+  const gained = playerWon ? 60 : 15;
+  appState.gems += gained; persistProgress(); updateGemDisplays();
+  showResults({
+    win: playerWon,
+    title: playerWon ? 'Victory!' : 'Defeated',
+    sub: playerWon ? `You outscored ${session.opp.name}!` : `${session.opp.name} edged you out.`,
+    score: session.score, target: BATTLE_TARGET, gems: gained,
+    primaryLabel: 'Battle Again',
+    primaryAction: ()=>startBattle()
+  });
+}
+
+function updateSoloHud(){
+  document.getElementById('solo-score').textContent = `${session.score} / ${session.level.target}`;
+  document.getElementById('solo-moves').textContent = session.movesLeft;
+  const pct = Math.min(100, (session.score/session.level.target)*100);
+  document.getElementById('solo-progress').style.width = pct+'%';
+  updateGemDisplays();
+}
+function updateBattleHud(){
+  document.getElementById('battle-you-score').textContent = session.score;
+  document.getElementById('battle-ai-score').textContent = session.aiScore;
+  document.getElementById('battle-you-bar').style.width = Math.min(100, session.score/BATTLE_TARGET*100)+'%';
+  document.getElementById('battle-ai-bar').style.width = Math.min(100, session.aiScore/BATTLE_TARGET*100)+'%';
+  document.getElementById('battle-timer').textContent = session.timeLeft+'s';
+}
+function updateGemDisplays(){
+  ['home-gems','avsel-gems','lvlsel-gems','game-gems'].forEach(id=>{
+    const el = document.getElementById(id); if (!el) return;
+    const changed = el.textContent !== String(appState.gems);
+    el.textContent = appState.gems;
+    if (changed){
+      const pill = el.closest('.gemcount');
+      if (pill){ pill.classList.remove('pulse'); void pill.offsetWidth; pill.classList.add('pulse'); }
+    }
+  });
+}
+function updatePowerUI(){
+  const av = selectedAvatar();
+  document.getElementById('power-icon').textContent = av.icon;
+  document.getElementById('power-name').textContent = av.powerName;
+  document.getElementById('power-desc').textContent = av.powerDesc;
+  const ring = document.getElementById('power-ring-fill');
+  const circumference = 2*Math.PI*42;
+  ring.style.strokeDasharray = circumference;
+  const pct = session ? Math.min(1, session.charge/av.charge) : 0;
+  ring.style.strokeDashoffset = circumference * (1-pct);
+  const btn = document.getElementById('power-btn');
+  const stateEl = document.getElementById('power-state');
+  const ready = session && session.charge >= av.charge;
+  btn.classList.toggle('ready', !!ready);
+  stateEl.textContent = ready ? 'READY · TAP TO UNLEASH' : `CHARGING · ${session?session.charge:0}/${av.charge}`;
+}
+
+/* =========================================================
+   BOARD INTERACTION (swipe to swap)
+========================================================= */
+// A swipe's screen-pixel angle maps to one of the 6 hex directions (60° apart).
+const HEX_SWIPE_DIRS = [ [1,0], [0,1], [-1,1], [-1,0], [0,-1], [1,-1] ]; // at 0,60,120,180,240,300 deg
+function angleToHexDir(dx,dy){
+  let angle = Math.atan2(dy,dx) * 180/Math.PI;
+  if (angle<0) angle += 360;
+  const idx = Math.round(angle/60) % 6;
+  return HEX_SWIPE_DIRS[idx];
+}
+function bindBoardEvents(){
+  let start = null;
+  boardEl.onpointerdown = (e)=>{
+    if (!session || session.busy) return;
+    const t = e.target.closest('.tile'); if (!t) return;
+    if (t.setPointerCapture) { try { t.setPointerCapture(e.pointerId); } catch(err){} }
+    start = { q:+t.dataset.q, r:+t.dataset.r, x:e.clientX, y:e.clientY };
+  };
+  boardEl.onpointerup = (e)=>{
+    if (!start || !session || session.busy) return;
+    const s = start; start = null;
+    const dx = e.clientX - s.x, dy = e.clientY - s.y;
+    if (Math.hypot(dx,dy) < 18) return;
+    const [dq,dr] = angleToHexDir(dx,dy);
+    const target = { q:s.q+dq, r:s.r+dr };
+    if (!(hexKey(target.q,target.r) in session.board)) return;
+    attemptSwap({q:s.q,r:s.r}, target);
+  };
+}
+
+async function attemptSwap(a, b){
+  if (!isHexAdjacent(a,b) || session.busy) return;
+  session.busy = true;
+  clearHint();
+  swapHex(session.board, a, b);
+  const matched = findMatches(session.board);
+  if (matched.size === 0){
+    swapHex(session.board, a, b); // revert data
+    Sound.swapInvalid();
+    await animateSwap(a,b, true); // visual swap-and-back
+    session.busy = false;
+    return;
+  }
+  // valid: play swap visually then resolve
+  await animateSwap(a,b,false);
+  await resolveCascade(matched, 1);
+  if (session.mode === 'solo'){
+    session.movesLeft -= 1;
+    updateSoloHud();
+    // A level still in play stays resumable; one that just ended has been cleared.
+    if (!checkSoloEnd()) saveSoloSession();
+  } else {
+    updateBattleHud();
+    if (session.score >= BATTLE_TARGET) { session.busy=false; endBattle(true); return; }
+  }
+  session.busy = false;
+}
+
+async function animateSwap(a,b, revert){
+  const elA = session.elMap[hexKey(a.q,a.r)];
+  const elB = session.elMap[hexKey(b.q,b.r)];
+  if (!elA || !elB) return;
+  positionHexTile(elA, b.q, b.r);
+  positionHexTile(elB, a.q, a.r);
+  await sleep(130);
+  if (revert){
+    positionHexTile(elA, a.q, a.r);
+    positionHexTile(elB, b.q, b.r);
+    await sleep(130);
+    return;
+  }
+  // commit swap in the element map
+  session.elMap[hexKey(a.q,a.r)] = elB;
+  session.elMap[hexKey(b.q,b.r)] = elA;
+  elA.dataset.q = b.q; elA.dataset.r = b.r;
+  elB.dataset.q = a.q; elB.dataset.r = a.r;
+}
+
+async function resolveCascade(firstMatch, comboStart){
+  let matched = firstMatch;
+  let combo = comboStart;
+  while (matched.size > 0){
+    // score
+    const av = selectedAvatar();
+    let maxRun = 3;
+    matched.forEach(key=>{ maxRun = Math.max(maxRun, (matched.runLen && matched.runLen[key]) || 3); });
+    const sizeBonus = maxRun>=5 ? 2 : (maxRun>=4 ? 1.5 : 1);
+    let gained;
+    if (window.MatchLogic && typeof window.MatchLogic.scoreMatch === 'function') {
+      gained = window.MatchLogic.scoreMatch({ size: matched.size, maxRun, combo });
+    } else {
+      gained = Math.round(matched.size * BASE_POINTS * combo * sizeBonus);
+    }
+    if (session.scoreBuffUses > 0){ gained = Math.round(gained*session.scoreBuffMult); session.scoreBuffUses--; }
+    session.score += gained;
+    let chargeGain = matched.size;
+    if (session.chargeBuffUses > 0){ chargeGain = Math.round(chargeGain*session.chargeBuffMult); session.chargeBuffUses--; }
+    session.charge = Math.min(av.charge, session.charge + chargeGain);
+    updatePowerUI();
+    spawnScorePopup(matched, gained, combo);
+    Sound.match(combo);
+    vibrate(combo > 1 ? [10,30,10] : 10);
+    if (sizeBonus >= 2){ showToast('5-Match! ⭐ Double points!'); spawnComboBurst('5-MATCH! ⭐'); }
+    else if (sizeBonus >= 1.5){ showToast('4-Match! +50% bonus!'); spawnComboBurst('4-MATCH!'); }
+    else if (combo === 2) showToast('Combo x2!');
+    else if (combo >= 3){ showToast(`Combo x${combo}! 🔥`); spawnComboBurst(`COMBO x${combo}!`); }
+    // clear animation
+    matched.forEach(key=>{
+      const el = session.elMap[key];
+      if (el) el.classList.add('clearing');
+    });
+    await sleep(180);
+    // compute collapse plan and animate fall
+    const plan = computeCollapse(session.board, matched);
+    await animateCollapse(plan);
+    matched = findMatches(session.board);
+    combo += 1;
+    if (session.mode==='solo') updateSoloHud(); else updateBattleHud();
+  }
+  await reshuffleIfStuck();
+}
+
+/* =========================================================
+   DEAD BOARD
+   The one path that recovers from a board no swap can improve on:
+   shuffle the very same tiles back into an order that has a legal
+   move, and tell the player it happened.
+   ========================================================= */
+// A board with no matches and no legal swap anywhere: (q + 2r) mod 6 walks
+// the six types in a pattern that no three-in-a-row and no swap can beat.
+function stuckBoard(){
+  const board = {};
+  HEX_CELLS.forEach(c=> board[hexKey(c.q,c.r)] = TYPES[(((c.q + 2*c.r) % 6) + 6) % 6]);
+  return board;
+}
+
+// Returns true when the board had to be reshuffled.
+async function reshuffleIfStuck(){
+  if (!session || hasPossibleMove(session.board)) return false;
+  await sleep(200);
+  session.board = MatchLogic.shuffleBoard(session.board);
+  session.elMap = freshRenderBoard(session.board);
+  showToast('No moves left — board reshuffled');
+  return true;
+}
+
+async function animateCollapse(plan){
+  const newMap = {};
+  const incoming = [];
+  for (const item of plan){
+    if (item.fromR !== null){
+      const el = session.elMap[hexKey(item.q, item.fromR)];
+      if (el){
+        el.classList.remove('clearing');
+        newMap[hexKey(item.q, item.toR)] = el;
+        el.dataset.q = item.q; el.dataset.r = item.toR;
+      }
+    } else {
+      const keyId = 'k'+(tileKeySeq++);
+      const spawnR = QCOLUMNS_BY_Q[item.q].rMin - 1 - Math.random()*2;
+      const el = tileEl(item.type, item.q, spawnR, keyId);
+      el.classList.add('spawning');
+      boardEl.appendChild(el);
+      newMap[hexKey(item.q, item.toR)] = el;
+      incoming.push(el);
+    }
+  }
+  // clean any leftover old elements still marked clearing (already-cleared cells not reassigned)
+  Object.keys(session.elMap).forEach(k=>{
+    const el = session.elMap[k];
+    if (el && el.classList.contains('clearing') && !Object.values(newMap).includes(el)){
+      el.remove();
+    }
+  });
+  session.elMap = newMap;
+  void boardEl.offsetWidth; // force reflow
+  incoming.forEach(el=> el.style.opacity = '0');
+  Object.keys(session.elMap).forEach(key=>{
+    const [q,r] = key.split(',').map(Number);
+    positionHexTile(session.elMap[key], q, r);
+  });
+  incoming.forEach(el=>{ el.style.opacity=''; el.classList.remove('spawning'); });
+  await sleep(170);
+}
+
+// Ends the level once the target is met or the moves run out, clearing the saved
+// session. Returns true when the level is over, false while it is still in play.
+function checkSoloEnd(){
+  if (session.score >= session.level.target){
+    clearSavedSession();
+    appState.maxLevelUnlocked = Math.max(appState.maxLevelUnlocked, session.level.id+1);
+    const gained = 40;
+    appState.gems += gained; persistProgress(); updateGemDisplays();
+    showResults({
+      win:true, title:'Victory!', sub:'Target crushed with moves to spare.',
+      score: session.score, target: session.level.target, gems: gained,
+      primaryLabel: session.level.id < LEVELS.length ? 'Next Level' : 'Back to Levels',
+      primaryAction: ()=> session.level.id < LEVELS.length ? startSoloLevel(session.level.id+1) : goto('screen-levels', renderLevelGrid)
+    });
+    return true;
+  } else if (session.movesLeft <= 0){
+    clearSavedSession();
+    const gained = 5;
+    appState.gems += gained; persistProgress(); updateGemDisplays();
+    showResults({
+      win:false, title:'Out of Moves', sub:'So close — try again?',
+      score: session.score, target: session.level.target, gems: gained,
+      primaryLabel:'Retry Level',
+      primaryAction: ()=>startSoloLevel(session.level.id)
+    });
+    return true;
+  }
+  return false;
+}
+
+/* =========================================================
+   HINT (free, costs no move)
+   ========================================================= */
+// Drop the highlight from whatever pair is currently marked.
+function clearHint(){
+  boardEl.querySelectorAll('.tile.hint').forEach(el=> el.classList.remove('hint'));
+}
+document.getElementById('hint-btn').addEventListener('click', ()=>{
+  if (!session || !session.elMap || session.busy) return;
+  const hint = findHint(session.board);
+  clearHint();
+  if (!hint){ showToast('No hint available — no swap can match'); return; }
+  [hint.a, hint.b].forEach(c=>{
+    const el = session.elMap[hexKey(c.q, c.r)];
+    if (el) el.classList.add('hint');
+  });
+  Sound.beep(880, 0.1, 'sine', 0.12);
+  vibrate(10);
+});
+
+/* =========================================================
+   AVATAR POWERS
+========================================================= */
+document.getElementById('power-btn').addEventListener('click', async ()=>{
+  if (!session || session.busy) return;
+  const av = selectedAvatar();
+  if (session.charge < av.charge) return;
+  session.busy = true;
+  session.charge = 0;
+  let matched = new Set();
+  switch(av.effect){
+    case 'clearRow': { // hex: clear a full q-axis line
+      matched = MatchLogic.lineTargets('q');
+      session.scoreBuffUses = 3; session.scoreBuffMult = 1.5;
+      break;
+    }
+    case 'clearColumn': { // hex: clear a full r-axis line
+      matched = MatchLogic.lineTargets('r');
+      session.chargeBuffUses = 4; session.chargeBuffMult = 2;
+      break;
+    }
+    case 'clearArea': { // hex: a center hex + its 6 neighbors, then chain lightning
+      matched = MatchLogic.areaTargets(session.board);
+      break;
+    }
+    case 'clearType': {
+      matched = MatchLogic.typeTargets(session.board);
+      appState.gems += 15; persistProgress(); updateGemDisplays();
+      break;
+    }
+    case 'convertTiles': {
+      const allKeys = Object.keys(session.board);
+      matched = MatchLogic.convertTiles(session.board);
+      const el = session.elMap;
+      allKeys.forEach(key=>{ el[key].textContent = TILE_ICONS[session.board[key]]; });
+      if (session.mode==='solo'){ session.movesLeft += 2; updateSoloHud(); }
+      break;
+    }
+    case 'extraMoves': {
+      if (session.mode==='solo'){ session.movesLeft += 5; updateSoloHud(); saveSoloSession(); }
+      else { session.timeLeft += 8; updateBattleHud(); }
+      session.scoreBuffUses = 5; session.scoreBuffMult = 2;
+      showToast(av.powerName + ' unleashed! 2x score for 5 matches');
+      Sound.power();
+      vibrate([15,40,15]);
+      screenShake();
+      powerFlash();
+      updatePowerUI();
+      session.busy = false;
+      return;
+    }
+  }
+  let buffNote = '';
+  if (session.scoreBuffUses>0) buffNote = ` — +${Math.round((session.scoreBuffMult-1)*100)}% score x${session.scoreBuffUses}`;
+  else if (session.chargeBuffUses>0) buffNote = ` — charge x${session.chargeBuffMult} for ${session.chargeBuffUses} matches`;
+  showToast(av.powerName + ' unleashed!' + buffNote);
+  Sound.power();
+  vibrate([15,40,15]);
+  screenShake();
+  powerFlash();
+  updatePowerUI();
+  if (matched.size > 0){
+    await resolveCascade(matched, 1);
+  }
+  if (session.mode==='solo'){ updateSoloHud(); if (!checkSoloEnd()) saveSoloSession(); }
+  else { updateBattleHud(); if (session.score >= BATTLE_TARGET){ session.busy=false; endBattle(true); return; } }
+  session.busy = false;
+});
+
+/* =========================================================
+   RESULTS SCREEN
+========================================================= */
+function showResults({win,title,sub,score,target,gems,primaryLabel,primaryAction}){
+  if (win){ Sound.victory(); vibrate([20,60,20,60,40]); }
+  else { Sound.defeat(); vibrate(200); }
+  const stars = win ? starsForScore(score, target) : 0;
+  document.getElementById('res-banner').textContent = win ? '🏆' : '💀';
+  document.getElementById('res-title').textContent = title;
+  const starsEl = document.getElementById('res-stars');
+  starsEl.dataset.stars = stars;
+  starsEl.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+  document.getElementById('res-sub').textContent = sub;
+  document.getElementById('res-score').textContent = score;
+  document.getElementById('res-gems').textContent = '+'+gems;
+  document.getElementById('res-primary').textContent = primaryLabel;
+  document.getElementById('res-primary').onclick = primaryAction;
+  goto('screen-results');
+}
+
+/* =========================================================
+   AVATAR SELECT SCREEN
+========================================================= */
+function renderAvatarGrid(){
+  const grid = document.getElementById('avatar-grid');
+  grid.innerHTML = '';
+  AVATARS.forEach(av=>{
+    const unlocked = appState.unlocked.includes(av.id);
+    const card = document.createElement('div');
+    card.className = 'avatar-card' + (appState.selectedAvatarId===av.id ? ' selected':'');
+    card.innerHTML = `
+      <div class="icon">${av.icon}</div>
+      <div class="name">${av.name}</div>
+      <div class="power">${av.powerName} — ${av.powerDesc}</div>
+      <div class="lore">"${av.lore}"</div>
+      <span class="tag ${unlocked ? 'free':'locked'}">${unlocked ? (av.free?'FREE':'UNLOCKED') : 'LOCKED · '+av.price}</span>
+    `;
+    if (unlocked){
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', ()=>{
+        appState.selectedAvatarId = av.id;
+        persistProgress();
+        renderAvatarGrid();
+        updateHomeAvatar();
+      });
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'unlockbtn';
+      btn.textContent = `Unlock ${av.price} (Test Mode)`;
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        appState.unlocked.push(av.id);
+        appState.selectedAvatarId = av.id;
+        persistProgress();
+        renderAvatarGrid();
+        updateHomeAvatar();
+        showToast('Test unlock — wire up real payments before launch');
+      });
+      card.appendChild(btn);
+    }
+    grid.appendChild(card);
+  });
+}
+function updateHomeAvatar(){
+  const av = selectedAvatar();
+  document.getElementById('home-avatar-icon').textContent = av.icon;
+  document.getElementById('home-avatar-name').textContent = av.name;
+}
+
+/* =========================================================
+   LEVEL SELECT SCREEN
+========================================================= */
+function renderLevelGrid(){
+  const grid = document.getElementById('level-grid');
+  grid.innerHTML = '';
+  LEVELS.forEach(lvl=>{
+    const locked = lvl.id > appState.maxLevelUnlocked;
+    const card = document.createElement('div');
+    card.className = 'level-card' + (locked ? ' locked':'');
+    card.innerHTML = `<div class="num">${locked?'🔒':lvl.id}</div><div class="tgt">${lvl.target} pts · ${lvl.moves} moves</div>`;
+    if (!locked) card.addEventListener('click', ()=> startSoloLevel(lvl.id));
+    grid.appendChild(card);
+  });
+}
+
+/* =========================================================
+   NAVIGATION
+========================================================= */
+function goto(screenId, cb){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(screenId).classList.add('active');
+  if (cb) cb();
+  window.scrollTo(0,0);
+  debugSync();
+}
+function teardownSessionTimers(){
+  if (session){
+    clearInterval(session.clockTimer);
+    clearTimeout(session.aiTimer);
+  }
+}
+
+document.querySelectorAll('[data-back]').forEach(b=>{
+  b.addEventListener('click', ()=> goto(b.dataset.back));
+});
+document.getElementById('btn-game-back').addEventListener('click', ()=>{
+  teardownSessionTimers();
+  goto(session && session.mode==='solo' ? 'screen-levels' : 'screen-home', session && session.mode==='solo' ? renderLevelGrid : null);
+});
+document.getElementById('home-avatar-strip').addEventListener('click', ()=> goto('screen-avatars', renderAvatarGrid));
+document.getElementById('home-avatar-strip').addEventListener('keydown', (e)=>{ if(e.key==='Enter') goto('screen-avatars', renderAvatarGrid); });
+document.getElementById('btn-goto-levels').addEventListener('click', ()=> goto('screen-levels', renderLevelGrid));
+document.getElementById('btn-continue').addEventListener('click', ()=>{
+  if (!savedSession) return;
+  startSoloLevel(savedSession.levelId, savedSession);
+});
+document.getElementById('btn-goto-battle').addEventListener('click', ()=> startBattle());
+document.getElementById('sound-toggle').addEventListener('click', ()=>{
+  Sound.enabled = !Sound.enabled;
+  try{ localStorage.setItem('ml_sound', Sound.enabled ? 'on' : 'off'); }catch(e){}
+  updateSoundIcon();
+  syncMusicMute();
+  if (Sound.enabled) Sound.beep(660, 0.12, 'triangle', 0.15);
+});
+function updateSoundIcon(){
+  document.getElementById('sound-toggle').textContent = Sound.enabled ? '🔊' : '🔇';
+}
+// Autoplay policies require a user gesture before audio can start.
+window.addEventListener('pointerdown', ()=> Music.start(), { once:true });
+document.getElementById('res-home').addEventListener('click', ()=>{ teardownSessionTimers(); goto('screen-home'); });
+
+window.addEventListener('resize', ()=>{
+  if (session && session.elMap){
+    recalcHexSize();
+    Object.keys(session.elMap).forEach(key=>{
+      const [q,r] = key.split(',').map(Number);
+      positionHexTile(session.elMap[key], q, r);
+    });
+  }
+});
+
+/* =========================================================
+   DEBUG PANEL — only with ?debug=1
+   A small corner panel for reproducing and breaking levels: deal the
+   level in play from a known seed, force a dead board so the normal
+   reshuffle runs, read or wipe the saved progress, and start a level
+   even while it is still locked. Without the flag none of this exists —
+   the panel is only ever built when the flag is on, so it cannot show
+   up in a normal session.
+   ========================================================= */
+const DEBUG_ON = /(?:^|[?&])debug=1(?:&|$)/.test(location.search);
+let debugPanel = null;
+
+// Refresh what the panel reports: the seed the level in play was dealt from
+// and the progress as it is saved right now.
+function debugSync(){
+  if (!debugPanel) return;
+  debugPanel.querySelector('#debug-seed').textContent =
+    session && Number.isFinite(session.seed) ? String(session.seed) : '--';
+  Storage.load(PROGRESS_KEY, null).then(saved=>{
+    if (!debugPanel) return;
+    debugPanel.querySelector('#debug-progress').textContent =
+      saved ? JSON.stringify(saved) : 'nothing saved';
+  });
+}
+
+// Re-deal the level in play (level 1 when nothing is running) from a typed seed.
+function debugApplySeed(value){
+  const seed = Math.trunc(Number(value));
+  if (String(value).trim() === '' || !Number.isFinite(seed)){
+    showToast('Type a number to deal the level from');
+    return;
+  }
+  pinnedSeed = seed;
+  debugPanel.querySelector('#debug-seed-input').value = String(seed);
+  const levelId = session && session.mode === 'solo' ? session.level.id : 1;
+  teardownSessionTimers();
+  startSoloLevel(levelId, null, seed);
+  showToast(`Seed ${seed} — level ${levelId} dealt`);
+}
+
+// Swap the board for one no move can improve, then let the game find that out
+// and reshuffle it exactly as it does after a player's move.
+async function debugForceStuck(){
+  if (!session || !session.elMap || session.busy) return;
+  session.busy = true;
+  session.board = stuckBoard();
+  session.elMap = freshRenderBoard(session.board);
+  clearHint();
+  await reshuffleIfStuck();
+  session.busy = false;
+  if (session.mode === 'solo') saveSoloSession();
+  debugSync();
+}
+
+// Throw the saved progress away and start over as a brand-new player.
+function debugClearProgress(){
+  const wiped = [Storage.clear(PROGRESS_KEY), Storage.clear(SESSION_KEY)];
+  teardownSessionTimers();
+  session = null;
+  savedSession = null;
+  Object.assign(appState, newPlayerState());
+  updateContinueButton();
+  updateGemDisplays();
+  updateHomeAvatar();
+  goto('screen-home');
+  debugSync();
+  showToast('Saved progress cleared — new player');
+  Promise.all(wiped).catch(()=>{});
+}
+
+function initDebugPanel(){
+  if (!DEBUG_ON) return;
+  const panel = document.createElement('div');
+  panel.id = 'debug-panel';
+  panel.setAttribute('aria-label', 'Debug panel');
+  panel.innerHTML = `
+    <div class="dbg-title">DEBUG</div>
+    <div class="dbg-row"><label>seed</label><span id="debug-seed">--</span></div>
+    <div class="dbg-row">
+      <input id="debug-seed-input" type="text" inputmode="numeric" placeholder="seed" aria-label="Level seed">
+      <button id="debug-seed-apply" type="button">set</button>
+    </div>
+    <button id="debug-force-stuck" type="button">force stuck board</button>
+    <div class="dbg-row">
+      <select id="debug-level" aria-label="Level to start">${LEVELS.map(l=>`<option value="${l.id}">level ${l.id}</option>`).join('')}</select>
+      <button id="debug-go-level" type="button">go</button>
+    </div>
+    <pre id="debug-progress" aria-label="Saved progress"></pre>
+    <button id="debug-clear-progress" type="button">clear saved progress</button>
+  `;
+  document.body.appendChild(panel);
+  debugPanel = panel;
+
+  const seedInput = panel.querySelector('#debug-seed-input');
+  const applySeed = ()=> debugApplySeed(seedInput.value);
+  panel.querySelector('#debug-seed-apply').addEventListener('click', applySeed);
+  seedInput.addEventListener('keydown', (e)=>{ if (e.key === 'Enter'){ e.preventDefault(); applySeed(); } });
+  panel.querySelector('#debug-force-stuck').addEventListener('click', ()=>{ debugForceStuck(); });
+  panel.querySelector('#debug-go-level').addEventListener('click', ()=>{
+    // A debug shortcut: the level is played, but it stays locked afterwards.
+    const levelId = Number(panel.querySelector('#debug-level').value);
+    if (!LEVELS.some(l=>l.id===levelId)) return;
+    teardownSessionTimers();
+    startSoloLevel(levelId);
+    showToast(`Playing level ${levelId} — still locked`);
+  });
+  panel.querySelector('#debug-clear-progress').addEventListener('click', debugClearProgress);
+
+  // ?debug=1&seed=12345 opens the game already pinned to that seed.
+  const urlSeed = new URLSearchParams(location.search).get('seed');
+  if (urlSeed !== null && urlSeed.trim() !== '' && Number.isFinite(Number(urlSeed))){
+    pinnedSeed = Math.trunc(Number(urlSeed));
+    seedInput.value = String(pinnedSeed);
+  }
+  // Keep the panel clear of the board by giving the game that much bottom room.
+  document.getElementById('app').style.paddingBottom = (panel.offsetHeight + 12) + 'px';
+  debugSync();
+}
+
+/* =========================================================
+   BOOT
+========================================================= */
+async function boot(){
+  try{ Sound.enabled = localStorage.getItem('ml_sound') !== 'off'; }catch(e){}
+  updateSoundIcon();
+  initDebugPanel();
+  const fresh = newPlayerState();
+  const saved = await Storage.load(PROGRESS_KEY, null);
+  if (saved){
+    appState.gems = saved.gems ?? fresh.gems;
+    appState.unlocked = saved.unlocked ?? fresh.unlocked;
+    appState.selectedAvatarId = saved.selectedAvatarId ?? fresh.selectedAvatarId;
+    appState.maxLevelUnlocked = saved.maxLevelUnlocked ?? fresh.maxLevelUnlocked;
+  }
+  updateGemDisplays();
+  updateHomeAvatar();
+  await loadSavedSession();
+  debugSync();
+}
+boot();
+</script>
+</body>
+</html>
