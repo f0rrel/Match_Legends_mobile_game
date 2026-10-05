@@ -23,6 +23,36 @@
     --shadow:rgba(6,3,16,0.55);
     --radius:16px;
   }
+
+  /* ==== ML-JUICE: tile colours ====
+     The six matchable tile types, numbered the way the game numbers them
+     (TYPES in js/match-logic.js: sword, shield, urn, crown, flame, gem). This
+     block is the one place they are written down -- the tile rules below do
+     nothing but paint from them, so a colour is changed here and nowhere else.
+
+     Each one is the colour the tiles used to wear, lightened 15% towards white
+     (HSL lightness 47% -> 55%, hue and saturation kept). That is a small,
+     deliberate lift rather than a glow, and because every type moved the same
+     distance the six stay exactly as far apart from one another as they were,
+     and as far from the dark board they sit on. */
+  :root{
+    --tile-1:#5885C0; /* sword  */
+    --tile-2:#C06E58; /* shield */
+    --tile-3:#58C085; /* urn    */
+    --tile-4:#C0AF58; /* crown  */
+    --tile-5:#9C58C0; /* flame  */
+    --tile-6:#58C0C0; /* gem    */
+  }
+  /* A typed tile wears its type's colour. The base .tile rule paints a gradient
+     over background-color, so that gradient is dropped for typed tiles only --
+     untyped ones, and .tile.selected, are left exactly as they were. */
+  .tile[data-type]{ background-image:none; }
+  .tile[data-type="sword"]{ background-color:var(--tile-1); }
+  .tile[data-type="shield"]{ background-color:var(--tile-2); }
+  .tile[data-type="urn"]{ background-color:var(--tile-3); }
+  .tile[data-type="crown"]{ background-color:var(--tile-4); }
+  .tile[data-type="flame"]{ background-color:var(--tile-5); }
+  .tile[data-type="gem"]{ background-color:var(--tile-6); }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{height:100%;}
   body{
@@ -847,7 +877,8 @@ function tileEl(type, q, r, key){
   const d = document.createElement('div');
   d.className = 'tile';
   d.textContent = TILE_ICONS[type];
-  d.dataset.q = q; d.dataset.r = r; d.dataset.key = key;
+  // data-type is what the tile colour rules in the CSS key off.
+  d.dataset.q = q; d.dataset.r = r; d.dataset.key = key; d.dataset.type = type;
   positionHexTile(d, q, r);
   return d;
 }
@@ -1415,7 +1446,13 @@ document.getElementById('power-btn').addEventListener('click', async ()=>{
       const allKeys = Object.keys(session.board);
       matched = MatchLogic.convertTiles(session.board);
       const el = session.elMap;
-      allKeys.forEach(key=>{ el[key].textContent = TILE_ICONS[session.board[key]]; });
+      // A reshaped tile is given a new icon, so it must wear the new type's
+      // colour too -- otherwise the two would disagree.
+      allKeys.forEach(key=>{
+        const type = session.board[key];
+        el[key].textContent = TILE_ICONS[type];
+        el[key].dataset.type = type;
+      });
       if (session.mode==='solo'){ session.movesLeft += 2; updateSoloHud(); }
       break;
     }
