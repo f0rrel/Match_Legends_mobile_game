@@ -212,7 +212,12 @@
     0%,100%{ scale:1; }
     50%{ scale:1.16; }
   }
-  .tile.clearing{ animation:matchPop .18s ease-out forwards; }
+  /* ==== ML-JUICE: tile clear pop ====
+     The pop a tile plays as it is cleared: it swells and flares, then snaps out.
+     The class is added by playClearPop() and taken off again when the pop ends,
+     so it never outlives the tile it belongs to. 180ms keeps the pop inside the
+     clearing beat it always had, well under the 400ms it must not exceed. */
+  .tile.matchPop{ animation:matchPop .18s ease-out forwards; z-index:5; }
   @keyframes matchPop{
     0%{ scale:1; filter:brightness(1); }
     30%{ scale:1.4; filter:brightness(1.9); }
@@ -1207,15 +1212,17 @@ async function resolveCascade(firstMatch, comboStart){
     else if (sizeBonus >= 1.5){ showToast('4-Match! +50% bonus!'); spawnComboBurst('4-MATCH!'); }
     else if (combo === 2) showToast('Combo x2!');
     else if (combo >= 3){ showToast(`Combo x${combo}! 🔥`); spawnComboBurst(`COMBO x${combo}!`); }
-    // clear animation
+    // clear animation: collect the tiles being cleared, then pop them
+    const clearedEls = [];
     matched.forEach(key=>{
       const el = session.elMap[key];
-      if (el) el.classList.add('clearing');
+      if (el) clearedEls.push(el);
     });
+    playClearPop(clearedEls);
     await sleep(180);
     // compute collapse plan and animate fall
     const plan = computeCollapse(session.board, matched);
-    await animateCollapse(plan);
+    await animateCollapse(plan, clearedEls);
     matched = findMatches(session.board);
     combo += 1;
     if (session.mode==='solo') updateSoloHud(); else updateBattleHud();
@@ -1247,14 +1254,13 @@ async function reshuffleIfStuck(){
   return true;
 }
 
-async function animateCollapse(plan){
+async function animateCollapse(plan, clearedEls = []){
   const newMap = {};
   const incoming = [];
   for (const item of plan){
     if (item.fromR !== null){
       const el = session.elMap[hexKey(item.q, item.fromR)];
       if (el){
-        el.classList.remove('clearing');
         newMap[hexKey(item.q, item.toR)] = el;
         el.dataset.q = item.q; el.dataset.r = item.toR;
       }
@@ -1268,13 +1274,10 @@ async function animateCollapse(plan){
       incoming.push(el);
     }
   }
-  // clean any leftover old elements still marked clearing (already-cleared cells not reassigned)
-  Object.keys(session.elMap).forEach(k=>{
-    const el = session.elMap[k];
-    if (el && el.classList.contains('clearing') && !Object.values(newMap).includes(el)){
-      el.remove();
-    }
-  });
+  // the cleared tiles are gone: drop every one of them that the new board does
+  // not carry over, leaving the cells they stood on for the incoming tiles
+  const kept = new Set(Object.values(newMap));
+  clearedEls.forEach(el=>{ if (!kept.has(el)) el.remove(); });
   session.elMap = newMap;
   void boardEl.offsetWidth; // force reflow
   incoming.forEach(el=> el.style.opacity = '0');
@@ -1719,6 +1722,53 @@ document.getElementById('effects-toggle').addEventListener('click', ()=>{
   window.setEffectsEnabled(!effectsOn);
 });
 updateEffectsToggle();
+
+// ==== ML-JUICE: tile clear pop ====
+/* A cleared tile wears 'matchPop' while it pops. This is the only place that
+   puts the class on and the only place that takes it off, so the pop can be
+   left out entirely for a player who asked for less movement or turned effects
+   off — those tiles just clear, exactly as before.
+
+   Nothing here waits: the class goes on, the pop plays inside the clearing beat
+   the cascade already had while gravity starts on its own schedule, and the
+   class is dropped when the animation ends. A timer backs that up for the case
+   where the tile has already left the DOM by then and no animation can report
+   back, so the class can never stick to a tile that lives on. */
+const MATCH_POP_CLASS = 'matchPop';
+const MATCH_POP_BACKSTOP_MS = 320; // well past the 180ms pop: a safety net only
+const matchPopTimers = new WeakMap();
+
+// Reduced motion wins. Otherwise the shared effects switch, when it is there.
+function matchPopWanted(){
+  try{
+    if (typeof window.matchMedia === 'function'
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+  }catch(e){ /* no matchMedia to ask: keep the pop */ }
+  if (typeof window.effectsEnabled === 'function' && !window.effectsEnabled()) return false;
+  return true;
+}
+
+// Pop each of these tiles, and take the class off again as soon as its pop ends.
+function playClearPop(els){
+  if (!matchPopWanted()) return;
+  for (const el of els){
+    if (!el || !el.classList) continue;
+    const previous = matchPopTimers.get(el);
+    if (previous) clearTimeout(previous); // one pop per tile, never overlapped
+    let timer = 0;
+    const done = (e)=>{
+      if (e && e.target !== el) return; // an animation on a child, not ours
+      clearTimeout(timer);
+      matchPopTimers.delete(el);
+      el.removeEventListener('animationend', done);
+      el.classList.remove(MATCH_POP_CLASS);
+    };
+    el.addEventListener('animationend', done);
+    el.classList.add(MATCH_POP_CLASS);
+    timer = setTimeout(done, MATCH_POP_BACKSTOP_MS); // only if the pop never reported
+    matchPopTimers.set(el, timer);
+  }
+}
 </script>
 </body>
 </html>
