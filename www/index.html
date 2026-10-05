@@ -1030,7 +1030,7 @@ async function resolveCascade(firstMatch, comboStart){
   }
   if (!hasPossibleMove(session.board)){
     await sleep(200);
-    session.board = createPlayableBoard();
+    session.board = MatchLogic.shuffleBoard(session.board);
     session.elMap = freshRenderBoard(session.board);
     showToast('No moves left — board reshuffled');
   }

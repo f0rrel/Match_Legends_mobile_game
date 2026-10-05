@@ -242,6 +242,64 @@
   /* === END TASK SECTION ml-1 === */
 
   /* === TASK SECTION ml-2 shuffle-in-place (add task code and api.* exports here) === */
+  // Running dry should not throw the player's tiles away: redeal the very same
+  // tiles instead. Each round permutes them at random, then trades offending
+  // tiles for quieter ones until nothing matches; we stop at the first
+  // arrangement that is match-free and still has a legal move.
+  // Returns a NEW board (the input is never touched); deterministic in rng.
+  function shuffleBoard(board, rng = Math.random){
+    const keys = Object.keys(board);
+    const tiles = Object.values(board);
+    const trial = {};
+    const deal = arr=> keys.forEach((key,i)=>{ trial[key] = arr[i]; });
+    const randIndex = max=> Math.min(max, Math.floor(rng()*(max+1)));
+    const dealRandom = ()=>{
+      const arr = tiles.slice();
+      for (let i=arr.length-1; i>0; i--){
+        const j = randIndex(i);
+        const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+      }
+      deal(arr);
+    };
+    // Leftover matches dominate the score; a dead board is the next worst thing.
+    const flaw = ()=>{
+      const matched = findMatches(trial).size;
+      if (matched > 0) return matched*2;
+      return hasPossibleMove(trial) ? 0 : 1;
+    };
+    let best = null, bestFlaw = Infinity;
+    const remember = ()=>{
+      const value = flaw();
+      if (value < bestFlaw){ bestFlaw = value; best = keys.map(key=> trial[key]); }
+    };
+    for (let round=0; round<40 && bestFlaw>0; round++){
+      dealRandom();
+      remember();
+      // Hill-climb out of the matches this deal produced: swap an offending
+      // tile with a random one, keeping the trade only if it quiets the board.
+      let matched = [...findMatches(trial)];
+      for (let step=0; step<250 && matched.length>0; step++){
+        const from = matched[randIndex(matched.length-1)];
+        const to = keys[randIndex(keys.length-1)];
+        if (to === from) continue;
+        const undo = tradeTiles(trial, from, to);
+        const after = [...findMatches(trial)];
+        if (after.length > matched.length) undo();
+        else matched = after;
+      }
+      if (matched.length === 0) remember();
+    }
+    // No clean deal turned up: only reachable for tile sets that cannot be laid
+    // out match-free at all (e.g. almost one single type), so keep the best we saw.
+    deal(best);
+    return { ...trial };
+  }
+  function tradeTiles(board, ka, kb){
+    const a = board[ka], b = board[kb];
+    board[ka] = b; board[kb] = a;
+    return ()=>{ board[ka] = a; board[kb] = b; };
+  }
+  api.shuffleBoard = shuffleBoard;
   /* === END TASK SECTION ml-2 === */
 
   /* === TASK SECTION ml-3 scoring-rules (add task code and api.* exports here) === */
