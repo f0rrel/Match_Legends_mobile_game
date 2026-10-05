@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "test": "npm run test:unit && npm run test:smoke",
-    "test:unit": "node --test tests/unit",
+    "test:unit": "node --test 'tests/unit/*.test.js'",
     "test:smoke": "playwright test tests/smoke",
-    "test:tasks": "node --test tests/tasks; playwright test tests/tasks",
+    "test:tasks": "node --test 'tests/tasks/*.test.js'; playwright test tests/tasks",
     "sync": "cap sync android",
     "open:android": "cap open android"
   },
@@ -16,6 +16,9 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^6.1.2",
-    "@playwright/test": "1.61.1"
+    "@playwright/test": "^1.63.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

@@ -5,7 +5,8 @@ build step and no bundler: `www/index.html` (UI, rendering, audio) and
 `www/js/match-logic.js` (the pure game logic: hex grid, matching, gravity, powers).
 
 ## One-time setup on your computer
-1. Install **Node.js LTS** — https://nodejs.org
+1. Install **Node.js 22 LTS** or newer — https://nodejs.org, or with nvm: `nvm install 22`
+   (the repo's `.nvmrc` says 22). Node 18 is not supported: the test tooling needs 22.
 2. Install **Android Studio** (free) — https://developer.android.com/studio
    During first launch, let it install the default Android SDK when prompted.
 
@@ -50,6 +51,7 @@ Android Studio installs in the background.
   artifact preview) or a small backend if you want it to persist.
 
 ## Tests
+Requires **Node.js 22** or newer (`nvm use` picks it up from `.nvmrc`).
 ```bash
 npm install
 npx playwright install chromium     # once per machine
