@@ -265,6 +265,8 @@
   .results-wrap{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;}
   .results-wrap .banner{font-size:44px; margin-bottom:6px;}
   .results-wrap h2{font-size:26px; margin:0 0 4px; color:var(--gold-bright);}
+  .results-wrap .stars{font-size:30px; line-height:1.1; letter-spacing:4px; margin-bottom:10px; color:var(--gold-bright);}
+  .results-wrap .stars[data-stars="0"]{color:var(--parchment-dim);}
   .results-wrap .sub{color:var(--parchment-dim); font-size:13px; margin-bottom:20px;}
   .results-stats{display:flex; gap:10px; margin-bottom:26px;}
   .results-stats .stat{background:var(--panel); border:1px solid rgba(231,184,75,0.2); border-radius:12px; padding:12px 16px;}
@@ -443,6 +445,7 @@
     <div class="results-wrap">
       <div class="banner" id="res-banner">🏆</div>
       <h2 id="res-title">Victory!</h2>
+      <div class="stars" id="res-stars" data-stars="0" aria-label="Star rating">☆☆☆</div>
       <div class="sub" id="res-sub">You crushed the target.</div>
       <div class="results-stats">
         <div class="stat"><div class="v" id="res-score">0</div><div class="k">Score</div></div>
@@ -471,7 +474,7 @@ const TILE_ICONS = { sword:'⚔️', shield:'🛡️', urn:'🏺', crown:'👑',
 const {
   BASE_POINTS, TYPES, hexKey, HEX_CELLS, QCOLUMNS_BY_Q,
   isHexAdjacent, swapHex,
-  findMatches, hasPossibleMove, createPlayableBoard, computeCollapse, findHint,
+  findMatches, hasPossibleMove, createPlayableBoard, computeCollapse, findHint, starsForScore,
 } = window.MatchLogic;
 
 const AVATARS = [
@@ -978,7 +981,7 @@ function endBattle(playerWon){
     win: playerWon,
     title: playerWon ? 'Victory!' : 'Defeated',
     sub: playerWon ? `You outscored ${session.opp.name}!` : `${session.opp.name} edged you out.`,
-    score: session.score, gems: gained,
+    score: session.score, target: BATTLE_TARGET, gems: gained,
     primaryLabel: 'Battle Again',
     primaryAction: ()=>startBattle()
   });
@@ -1203,7 +1206,7 @@ function checkSoloEnd(){
     appState.gems += gained; persistProgress(); updateGemDisplays();
     showResults({
       win:true, title:'Victory!', sub:'Target crushed with moves to spare.',
-      score: session.score, gems: gained,
+      score: session.score, target: session.level.target, gems: gained,
       primaryLabel: session.level.id < LEVELS.length ? 'Next Level' : 'Back to Levels',
       primaryAction: ()=> session.level.id < LEVELS.length ? startSoloLevel(session.level.id+1) : goto('screen-levels', renderLevelGrid)
     });
@@ -1214,7 +1217,7 @@ function checkSoloEnd(){
     appState.gems += gained; persistProgress(); updateGemDisplays();
     showResults({
       win:false, title:'Out of Moves', sub:'So close — try again?',
-      score: session.score, gems: gained,
+      score: session.score, target: session.level.target, gems: gained,
       primaryLabel:'Retry Level',
       primaryAction: ()=>startSoloLevel(session.level.id)
     });
@@ -1315,11 +1318,15 @@ document.getElementById('power-btn').addEventListener('click', async ()=>{
 /* =========================================================
    RESULTS SCREEN
 ========================================================= */
-function showResults({win,title,sub,score,gems,primaryLabel,primaryAction}){
+function showResults({win,title,sub,score,target,gems,primaryLabel,primaryAction}){
   if (win){ Sound.victory(); vibrate([20,60,20,60,40]); }
   else { Sound.defeat(); vibrate(200); }
+  const stars = win ? starsForScore(score, target) : 0;
   document.getElementById('res-banner').textContent = win ? '🏆' : '💀';
   document.getElementById('res-title').textContent = title;
+  const starsEl = document.getElementById('res-stars');
+  starsEl.dataset.stars = stars;
+  starsEl.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
   document.getElementById('res-sub').textContent = sub;
   document.getElementById('res-score').textContent = score;
   document.getElementById('res-gems').textContent = '+'+gems;

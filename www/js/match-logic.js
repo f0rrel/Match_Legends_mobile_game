@@ -337,6 +337,18 @@
   /* === END TASK SECTION ml-4 === */
 
   /* === TASK SECTION ml-8 star-rating (add task code and api.* exports here) === */
+  // How a finished run is rated against the target it was aiming at: 1 star for
+  // hitting it, 2 for beating it by a quarter, 3 for beating it by half. Missing
+  // the target (or a run with no target at all) earns none.
+  // The multipliers are exact in binary, so no rounding creeps into a boundary.
+  function starsForScore(score, target){
+    if (!(target > 0)) return 0;
+    if (score >= target * 1.5) return 3;
+    if (score >= target * 1.25) return 2;
+    if (score >= target) return 1;
+    return 0;
+  }
+  api.starsForScore = starsForScore;
   /* === END TASK SECTION ml-8 === */
 
   return api;
