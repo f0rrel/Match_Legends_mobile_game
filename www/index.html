@@ -309,6 +309,37 @@
     text-transform:uppercase; letter-spacing:0.05em;
   }
   .story-banner .blurb{font-size:11.5px; color:var(--parchment-dim); margin-top:3px; line-height:1.4; font-style:italic;}
+
+  /* ---------- Debug panel (?debug=1) ----------
+     A dev-only corner panel, built by JS and only when the query flag is on.
+     It is deliberately tiny, and the game is given matching bottom padding
+     (set from the panel's own height) so it never sits over the board. */
+  #debug-panel{
+    position:fixed; right:4px; bottom:4px; z-index:40;
+    width:132px; max-width:38vw; padding:5px; border-radius:8px;
+    display:flex; flex-direction:column; gap:3px;
+    background:rgba(10,6,20,0.92); border:1px dashed rgba(231,184,75,0.55);
+    color:var(--parchment); font:600 9px/1.25 'Inter',system-ui,sans-serif;
+  }
+  #debug-panel .dbg-title{ font-family:'Cinzel',serif; font-size:9px; color:var(--gold-bright); letter-spacing:.06em; }
+  #debug-panel .dbg-row{ display:flex; align-items:center; gap:3px; }
+  #debug-panel label{ font-size:8px; text-transform:uppercase; letter-spacing:.05em; color:var(--parchment-dim); }
+  #debug-panel input, #debug-panel select{
+    flex:1; min-width:0; padding:2px; font:inherit; color:var(--parchment);
+    background:var(--void-2); border:1px solid rgba(231,184,75,0.35); border-radius:4px;
+  }
+  #debug-panel button{
+    padding:3px 4px; font:inherit; border-radius:4px;
+    background:var(--panel-2); border:1px solid rgba(231,184,75,0.35); color:var(--parchment);
+  }
+  #debug-panel button:active{ scale:0.94; }
+  #debug-panel #debug-seed{ font-family:'Cinzel',serif; font-size:10px; color:var(--gold-bright); }
+  #debug-panel #debug-progress{
+    margin:0; padding:3px; max-height:44px; overflow:auto;
+    background:var(--void); border:1px solid rgba(231,184,75,0.2); border-radius:4px;
+    color:var(--parchment-dim); font:500 8px/1.3 ui-monospace, Menlo, Consolas, monospace;
+    white-space:pre-wrap; word-break:break-all;
+  }
 </style>
 </head>
 <body>
@@ -473,7 +504,7 @@ const TILE_ICONS = { sword:'⚔️', shield:'🛡️', urn:'🏺', crown:'👑',
 // www/js/match-logic.js so it can be unit tested.
 const {
   BASE_POINTS, TYPES, hexKey, HEX_CELLS, QCOLUMNS_BY_Q,
-  isHexAdjacent, swapHex,
+  isHexAdjacent, swapHex, createRng,
   findMatches, hasPossibleMove, createPlayableBoard, computeCollapse, findHint, starsForScore,
 } = window.MatchLogic;
 
@@ -690,20 +721,28 @@ const Storage = {
 /* =========================================================
    APP STATE
 ========================================================= */
-const appState = {
-  gems: 500,
-  unlocked: ['gladiator','viking','shaman'],
-  selectedAvatarId: 'gladiator',
-  maxLevelUnlocked: 1,
-};
+const PROGRESS_KEY = 'ml_progress';
+
+// A brand-new player: what the game starts from, and what the debug panel
+// resets it to when the saved progress is thrown away.
+function newPlayerState(){
+  return {
+    gems: 500,
+    unlocked: ['gladiator','viking','shaman'],
+    selectedAvatarId: 'gladiator',
+    maxLevelUnlocked: 1,
+  };
+}
+const appState = newPlayerState();
 
 function selectedAvatar(){ return AVATARS.find(a => a.id === appState.selectedAvatarId); }
 
 async function persistProgress(){
-  await Storage.save('ml_progress', {
+  await Storage.save(PROGRESS_KEY, {
     gems: appState.gems, unlocked: appState.unlocked,
     selectedAvatarId: appState.selectedAvatarId, maxLevelUnlocked: appState.maxLevelUnlocked
   });
+  debugSync();
 }
 
 /* =========================================================
@@ -823,6 +862,18 @@ let session = null; // active game session object
 window.__ML_TEST__ = { session: () => session, appState: () => appState };
 let tileKeySeq = 1;
 
+/* =========================================================
+   SEEDED LEVELS
+   Every board is dealt from a seed through MatchLogic.createRng,
+   so the same seed always reproduces the same level -- which is what
+   makes a bug report ("level 3 was unfair") reproducible. The seed is
+   random unless one has been pinned (the ?seed= parameter or the debug
+   panel); the dealt seed is kept on the session.
+   ========================================================= */
+let pinnedSeed = null; // seed every new board is dealt from; null = deal a random one
+function randomSeed(){ return Math.floor(Math.random() * 2147483647); }
+function dealSeed(){ return pinnedSeed === null ? randomSeed() : pinnedSeed; }
+
 function freshRenderBoard(board){
   boardEl.innerHTML = '';
   recalcHexSize();
@@ -862,6 +913,7 @@ function saveSoloSession(){
   if (!session || session.mode !== 'solo') return;
   savedSession = {
     levelId: session.level.id,
+    seed: session.seed,
     board: { ...session.board },
     score: session.score,
     movesLeft: session.movesLeft,
@@ -897,15 +949,19 @@ async function loadSavedSession(){
 }
 
 // Begin a solo level. `saved` is a record from 'ml_session': it resumes the
-// interrupted attempt exactly as it was left; without one a fresh board is dealt.
-function startSoloLevel(levelId, saved){
+// interrupted attempt exactly as it was left; without one a fresh board is dealt
+// from `seed`, or from the pinned/random seed when none is given.
+function startSoloLevel(levelId, saved, seed){
   const lvl = LEVELS.find(l=>l.id===levelId);
   if (!lvl) return;
   const resumed = isResumableSession(saved) && saved.levelId === lvl.id;
+  const levelSeed = resumed
+    ? (Number.isFinite(saved.seed) ? saved.seed : dealSeed())
+    : (Number.isFinite(seed) ? seed : dealSeed());
   const chapterTitle = `Chapter ${lvl.id}: ${lvl.story.place}`;
   session = {
-    mode:'solo', level: lvl,
-    board: resumed ? { ...saved.board } : createPlayableBoard(),
+    mode:'solo', level: lvl, seed: levelSeed,
+    board: resumed ? { ...saved.board } : createPlayableBoard(createRng(levelSeed)),
     score: resumed ? saved.score : 0,
     movesLeft: resumed ? saved.movesLeft : lvl.moves,
     charge: resumed ? saved.charge : 0,
@@ -928,8 +984,9 @@ function startSoloLevel(levelId, saved){
 
 function startBattle(){
   const opp = AI_NAMES[Math.floor(Math.random()*AI_NAMES.length)];
+  const seed = dealSeed();
   session = {
-    mode:'battle', board:createPlayableBoard(), score:0, aiScore:0, timeLeft:BATTLE_SECONDS,
+    mode:'battle', seed, board:createPlayableBoard(createRng(seed)), score:0, aiScore:0, timeLeft:BATTLE_SECONDS,
     charge:0, elMap:null, busy:false, selected:null, opp,
     aiTimer:null, clockTimer:null, ended:false,
     scoreBuffUses:0, scoreBuffMult:1, chargeBuffUses:0, chargeBuffMult:1
@@ -1149,12 +1206,31 @@ async function resolveCascade(firstMatch, comboStart){
     combo += 1;
     if (session.mode==='solo') updateSoloHud(); else updateBattleHud();
   }
-  if (!hasPossibleMove(session.board)){
-    await sleep(200);
-    session.board = MatchLogic.shuffleBoard(session.board);
-    session.elMap = freshRenderBoard(session.board);
-    showToast('No moves left — board reshuffled');
-  }
+  await reshuffleIfStuck();
+}
+
+/* =========================================================
+   DEAD BOARD
+   The one path that recovers from a board no swap can improve on:
+   shuffle the very same tiles back into an order that has a legal
+   move, and tell the player it happened.
+   ========================================================= */
+// A board with no matches and no legal swap anywhere: (q + 2r) mod 6 walks
+// the six types in a pattern that no three-in-a-row and no swap can beat.
+function stuckBoard(){
+  const board = {};
+  HEX_CELLS.forEach(c=> board[hexKey(c.q,c.r)] = TYPES[(((c.q + 2*c.r) % 6) + 6) % 6]);
+  return board;
+}
+
+// Returns true when the board had to be reshuffled.
+async function reshuffleIfStuck(){
+  if (!session || hasPossibleMove(session.board)) return false;
+  await sleep(200);
+  session.board = MatchLogic.shuffleBoard(session.board);
+  session.elMap = freshRenderBoard(session.board);
+  showToast('No moves left — board reshuffled');
+  return true;
 }
 
 async function animateCollapse(plan){
@@ -1408,6 +1484,7 @@ function goto(screenId, cb){
   document.getElementById(screenId).classList.add('active');
   if (cb) cb();
   window.scrollTo(0,0);
+  debugSync();
 }
 function teardownSessionTimers(){
   if (session){
@@ -1456,21 +1533,143 @@ window.addEventListener('resize', ()=>{
 });
 
 /* =========================================================
+   DEBUG PANEL — only with ?debug=1
+   A small corner panel for reproducing and breaking levels: deal the
+   level in play from a known seed, force a dead board so the normal
+   reshuffle runs, read or wipe the saved progress, and start a level
+   even while it is still locked. Without the flag none of this exists —
+   the panel is only ever built when the flag is on, so it cannot show
+   up in a normal session.
+   ========================================================= */
+const DEBUG_ON = /(?:^|[?&])debug=1(?:&|$)/.test(location.search);
+let debugPanel = null;
+
+// Refresh what the panel reports: the seed the level in play was dealt from
+// and the progress as it is saved right now.
+function debugSync(){
+  if (!debugPanel) return;
+  debugPanel.querySelector('#debug-seed').textContent =
+    session && Number.isFinite(session.seed) ? String(session.seed) : '--';
+  Storage.load(PROGRESS_KEY, null).then(saved=>{
+    if (!debugPanel) return;
+    debugPanel.querySelector('#debug-progress').textContent =
+      saved ? JSON.stringify(saved) : 'nothing saved';
+  });
+}
+
+// Re-deal the level in play (level 1 when nothing is running) from a typed seed.
+function debugApplySeed(value){
+  const seed = Math.trunc(Number(value));
+  if (String(value).trim() === '' || !Number.isFinite(seed)){
+    showToast('Type a number to deal the level from');
+    return;
+  }
+  pinnedSeed = seed;
+  debugPanel.querySelector('#debug-seed-input').value = String(seed);
+  const levelId = session && session.mode === 'solo' ? session.level.id : 1;
+  teardownSessionTimers();
+  startSoloLevel(levelId, null, seed);
+  showToast(`Seed ${seed} — level ${levelId} dealt`);
+}
+
+// Swap the board for one no move can improve, then let the game find that out
+// and reshuffle it exactly as it does after a player's move.
+async function debugForceStuck(){
+  if (!session || !session.elMap || session.busy) return;
+  session.busy = true;
+  session.board = stuckBoard();
+  session.elMap = freshRenderBoard(session.board);
+  clearHint();
+  await reshuffleIfStuck();
+  session.busy = false;
+  if (session.mode === 'solo') saveSoloSession();
+  debugSync();
+}
+
+// Throw the saved progress away and start over as a brand-new player.
+function debugClearProgress(){
+  const wiped = [Storage.clear(PROGRESS_KEY), Storage.clear(SESSION_KEY)];
+  teardownSessionTimers();
+  session = null;
+  savedSession = null;
+  Object.assign(appState, newPlayerState());
+  updateContinueButton();
+  updateGemDisplays();
+  updateHomeAvatar();
+  goto('screen-home');
+  debugSync();
+  showToast('Saved progress cleared — new player');
+  Promise.all(wiped).catch(()=>{});
+}
+
+function initDebugPanel(){
+  if (!DEBUG_ON) return;
+  const panel = document.createElement('div');
+  panel.id = 'debug-panel';
+  panel.setAttribute('aria-label', 'Debug panel');
+  panel.innerHTML = `
+    <div class="dbg-title">DEBUG</div>
+    <div class="dbg-row"><label>seed</label><span id="debug-seed">--</span></div>
+    <div class="dbg-row">
+      <input id="debug-seed-input" type="text" inputmode="numeric" placeholder="seed" aria-label="Level seed">
+      <button id="debug-seed-apply" type="button">set</button>
+    </div>
+    <button id="debug-force-stuck" type="button">force stuck board</button>
+    <div class="dbg-row">
+      <select id="debug-level" aria-label="Level to start">${LEVELS.map(l=>`<option value="${l.id}">level ${l.id}</option>`).join('')}</select>
+      <button id="debug-go-level" type="button">go</button>
+    </div>
+    <pre id="debug-progress" aria-label="Saved progress"></pre>
+    <button id="debug-clear-progress" type="button">clear saved progress</button>
+  `;
+  document.body.appendChild(panel);
+  debugPanel = panel;
+
+  const seedInput = panel.querySelector('#debug-seed-input');
+  const applySeed = ()=> debugApplySeed(seedInput.value);
+  panel.querySelector('#debug-seed-apply').addEventListener('click', applySeed);
+  seedInput.addEventListener('keydown', (e)=>{ if (e.key === 'Enter'){ e.preventDefault(); applySeed(); } });
+  panel.querySelector('#debug-force-stuck').addEventListener('click', ()=>{ debugForceStuck(); });
+  panel.querySelector('#debug-go-level').addEventListener('click', ()=>{
+    // A debug shortcut: the level is played, but it stays locked afterwards.
+    const levelId = Number(panel.querySelector('#debug-level').value);
+    if (!LEVELS.some(l=>l.id===levelId)) return;
+    teardownSessionTimers();
+    startSoloLevel(levelId);
+    showToast(`Playing level ${levelId} — still locked`);
+  });
+  panel.querySelector('#debug-clear-progress').addEventListener('click', debugClearProgress);
+
+  // ?debug=1&seed=12345 opens the game already pinned to that seed.
+  const urlSeed = new URLSearchParams(location.search).get('seed');
+  if (urlSeed !== null && urlSeed.trim() !== '' && Number.isFinite(Number(urlSeed))){
+    pinnedSeed = Math.trunc(Number(urlSeed));
+    seedInput.value = String(pinnedSeed);
+  }
+  // Keep the panel clear of the board by giving the game that much bottom room.
+  document.getElementById('app').style.paddingBottom = (panel.offsetHeight + 12) + 'px';
+  debugSync();
+}
+
+/* =========================================================
    BOOT
 ========================================================= */
 async function boot(){
   try{ Sound.enabled = localStorage.getItem('ml_sound') !== 'off'; }catch(e){}
   updateSoundIcon();
-  const saved = await Storage.load('ml_progress', null);
+  initDebugPanel();
+  const fresh = newPlayerState();
+  const saved = await Storage.load(PROGRESS_KEY, null);
   if (saved){
-    appState.gems = saved.gems ?? 500;
-    appState.unlocked = saved.unlocked ?? ['gladiator','viking','shaman'];
-    appState.selectedAvatarId = saved.selectedAvatarId ?? 'gladiator';
-    appState.maxLevelUnlocked = saved.maxLevelUnlocked ?? 1;
+    appState.gems = saved.gems ?? fresh.gems;
+    appState.unlocked = saved.unlocked ?? fresh.unlocked;
+    appState.selectedAvatarId = saved.selectedAvatarId ?? fresh.selectedAvatarId;
+    appState.maxLevelUnlocked = saved.maxLevelUnlocked ?? fresh.maxLevelUnlocked;
   }
   updateGemDisplays();
   updateHomeAvatar();
   await loadSavedSession();
+  debugSync();
 }
 boot();
 </script>
