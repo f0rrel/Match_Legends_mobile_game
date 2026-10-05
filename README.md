@@ -1,7 +1,8 @@
 # Match Legends — build the Android APK
 
-This folder is a ready-to-go Capacitor project. The whole game lives in one file:
-`www/index.html` (plain HTML/CSS/JS, no build step, no bundler).
+This folder is a ready-to-go Capacitor project. The game is plain HTML/CSS/JS with no
+build step and no bundler: `www/index.html` (UI, rendering, audio) and
+`www/js/match-logic.js` (the pure game logic: hex grid, matching, gravity, powers).
 
 ## One-time setup on your computer
 1. Install **Node.js LTS** — https://nodejs.org
@@ -27,15 +28,15 @@ friend's phone. On the phone: tap the file → if blocked, enable "Install unkno
 for whichever app you opened it with (Files/Chrome/Gmail) → install.
 
 ## After you edit the game
-Every time you change the game, do this before rebuilding:
+Edit the files in `www/`, run the tests, then sync before rebuilding:
 ```bash
-cp index.html www/index.html   # or edit www/index.html directly
+npm test
 npx cap sync android
 ```
 Then re-run the Build APK(s) step in Android Studio.
 
 ## Want to test *right now*, before setting up Android Studio?
-Just open `index.html` directly in a phone's browser (AirDrop/email it to yourself),
+Just open `www/index.html` (together with `www/js/`) in a phone's browser (AirDrop/email it to yourself),
 or tap "Add to Home Screen" for an app-like icon. Same game, zero setup — useful while
 Android Studio installs in the background.
 
@@ -47,3 +48,16 @@ Android Studio installs in the background.
   restart for now. Easy next step: swap the `Storage` object in the script for
   `localStorage` (works fine in a real installed app, just not inside Claude.ai's
   artifact preview) or a small backend if you want it to persist.
+
+## Tests
+```bash
+npm install
+npx playwright install chromium     # once per machine
+npm test                            # unit tests (node:test) + headless smoke test (Playwright)
+npm run test:tasks                  # PENDING task acceptance tests: expected to fail until each task is done
+```
+- `tests/unit/` — unit tests of `www/js/match-logic.js` (Node's built-in test runner).
+- `tests/smoke/` — one Playwright test: the game loads with no console errors, a level
+  starts, and one scripted move works.
+- `tests/tasks/` — acceptance tests for planned tasks, written before the work. They are
+  **expected to fail** until their task is done, and `npm test` does not run them.

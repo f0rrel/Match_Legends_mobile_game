@@ -18,3 +18,7 @@ android/capacitor-cordova-android-plugins/build/
 
 # Aider
 .aider*
+
+# Playwright
+test-results/
+playwright-report/

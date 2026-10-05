@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "test": "npm run test:unit && npm run test:smoke",
+    "test:unit": "node --test tests/unit",
+    "test:smoke": "playwright test tests/smoke",
+    "test:tasks": "node --test tests/tasks; playwright test tests/tasks",
     "sync": "cap sync android",
     "open:android": "cap open android"
   },
@@ -11,6 +15,7 @@
     "@capacitor/core": "^6.1.2"
   },
   "devDependencies": {
-    "@capacitor/cli": "^6.1.2"
+    "@capacitor/cli": "^6.1.2",
+    "@playwright/test": "1.61.1"
   }
 }
