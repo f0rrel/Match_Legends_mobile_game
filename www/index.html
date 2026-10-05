@@ -640,21 +640,33 @@ function syncMusicMute(){ Music.setMuted(document.hidden || !Sound.enabled); }
 document.addEventListener('visibilitychange', syncMusicMute);
 
 /* =========================================================
-   STORAGE (best-effort; falls back to in-memory)
+   STORAGE (best-effort; native storage first, localStorage second)
+   window.storage is the Capacitor plugin and only exists in the
+   installed app. In a plain browser it is absent, so progress is
+   kept in localStorage instead -- that way gems, unlocked legends,
+   the chosen legend and unlocked levels survive a reload either way.
 ========================================================= */
 const Storage = {
   async load(key, fallback){
-    try{
-      if (window.storage){
+    if (window.storage){
+      try{
         const res = await window.storage.get(key);
         return res ? JSON.parse(res.value) : fallback;
-      }
+      }catch(e){ /* native storage unavailable; fall back to localStorage */ }
+    }
+    try{
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
     }catch(e){ /* no saved value yet, or storage unavailable */ }
     return fallback;
   },
   async save(key, value){
-    try{ if (window.storage) await window.storage.set(key, JSON.stringify(value)); }
-    catch(e){ /* non-fatal */ }
+    const json = JSON.stringify(value);
+    if (window.storage){
+      try{ await window.storage.set(key, json); return; }
+      catch(e){ /* native storage unavailable; fall back to localStorage */ }
+    }
+    try{ localStorage.setItem(key, json); }catch(e){ /* non-fatal */ }
   }
 };
 
