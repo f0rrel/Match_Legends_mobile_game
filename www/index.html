@@ -54,9 +54,9 @@
   @keyframes screenIn{ 0%{ opacity:0; scale:0.97; } 100%{ opacity:1; scale:1; } }
 
   .backbtn, .gemcount, .menu-btn, .avatar-strip, .avatar-card, .level-card:not(.locked),
-  .power-ring-btn, .btn, .unlockbtn{ transition:scale .12s ease; }
+  .power-ring-btn, .hint-btn, .btn, .unlockbtn{ transition:scale .12s ease; }
   .backbtn:active, .menu-btn:active, .avatar-strip:active, .avatar-card:active,
-  .level-card:not(.locked):active, .power-ring-btn:active, .btn:active, .unlockbtn:active{ scale:0.95; }
+  .level-card:not(.locked):active, .power-ring-btn:active, .hint-btn:active, .btn:active, .unlockbtn:active{ scale:0.95; }
   .hairline{height:1px; background:linear-gradient(90deg, transparent, rgba(231,184,75,0.35), transparent); border:none; margin:14px 0;}
 
   /* ---------- Top bar ---------- */
@@ -191,6 +191,17 @@
     user-select:none;
   }
   .tile.selected{box-shadow:0 0 0 2px var(--gold-bright) inset; background:linear-gradient(160deg, #3A2560, var(--panel-2));}
+  /* Hint: brightened, glowing and pulsing, so the suggested swap stands out
+     through the hexagon clip-path (a box-shadow would be clipped away). */
+  .tile.hint{
+    z-index:4;
+    filter:brightness(1.8) drop-shadow(0 0 9px var(--gold-bright));
+    animation:hintPulse .8s ease-in-out infinite;
+  }
+  @keyframes hintPulse{
+    0%,100%{ scale:1; }
+    50%{ scale:1.16; }
+  }
   .tile.clearing{ animation:matchPop .18s ease-out forwards; }
   @keyframes matchPop{
     0%{ scale:1; filter:brightness(1); }
@@ -239,6 +250,15 @@
   .power-info .pdesc{font-size:11px; color:var(--parchment-dim); margin-top:2px;}
   .power-info .pstate{font-size:10.5px; margin-top:4px; font-weight:800; letter-spacing:0.05em; color:var(--parchment-dim);}
   .power-ring-btn.ready .pstate-tag{color:var(--gold-bright);}
+
+  .hint-btn{
+    flex-shrink:0; display:flex; align-items:center; gap:6px;
+    padding:11px 13px; border-radius:12px; font-weight:800; font-size:13px;
+    font-family:'Cinzel',serif; color:#2A1B08;
+    background:linear-gradient(160deg, var(--gold-bright), var(--gold));
+    box-shadow:0 8px 20px var(--shadow);
+  }
+  .hint-btn .emo{font-size:17px;}
 
   /* ---------- Results ---------- */
   .results-wrap{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;}
@@ -407,6 +427,7 @@
         <div class="pdesc" id="power-desc">Clear an entire row</div>
         <div class="pstate" id="power-state">CHARGING · 0/18</div>
       </div>
+      <button class="hint-btn" id="hint-btn" aria-label="Show a hint"><span class="emo">💡</span><span>Hint</span></button>
     </div>
   </section>
 
@@ -443,7 +464,7 @@ const TILE_ICONS = { sword:'⚔️', shield:'🛡️', urn:'🏺', crown:'👑',
 const {
   BASE_POINTS, hexKey, HEX_CELLS, QCOLUMNS_BY_Q,
   isHexAdjacent, swapHex,
-  findMatches, hasPossibleMove, createPlayableBoard, computeCollapse,
+  findMatches, hasPossibleMove, createPlayableBoard, computeCollapse, findHint,
 } = window.MatchLogic;
 
 const AVATARS = [
@@ -944,6 +965,7 @@ function bindBoardEvents(){
 async function attemptSwap(a, b){
   if (!isHexAdjacent(a,b) || session.busy) return;
   session.busy = true;
+  clearHint();
   swapHex(session.board, a, b);
   const matched = findMatches(session.board);
   if (matched.size === 0){
@@ -1097,6 +1119,26 @@ function checkSoloEnd(){
     });
   }
 }
+
+/* =========================================================
+   HINT (free, costs no move)
+   ========================================================= */
+// Drop the highlight from whatever pair is currently marked.
+function clearHint(){
+  boardEl.querySelectorAll('.tile.hint').forEach(el=> el.classList.remove('hint'));
+}
+document.getElementById('hint-btn').addEventListener('click', ()=>{
+  if (!session || !session.elMap || session.busy) return;
+  const hint = findHint(session.board);
+  clearHint();
+  if (!hint){ showToast('No hint available — no swap can match'); return; }
+  [hint.a, hint.b].forEach(c=>{
+    const el = session.elMap[hexKey(c.q, c.r)];
+    if (el) el.classList.add('hint');
+  });
+  Sound.beep(880, 0.1, 'sine', 0.12);
+  vibrate(10);
+});
 
 /* =========================================================
    AVATAR POWERS

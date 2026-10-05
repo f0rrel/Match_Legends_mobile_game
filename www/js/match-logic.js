@@ -317,6 +317,23 @@
   /* === END TASK SECTION ml-3 === */
 
   /* === TASK SECTION ml-4 hint (add task code and api.* exports here) === */
+  // A swap worth suggesting: two adjacent cells whose exchange makes a match.
+  // Returns { a:{q,r}, b:{q,r} } or null when the board has no legal move.
+  // The board is left exactly as it was found (each trial swap is undone).
+  function findHint(board){
+    for (const c of HEX_CELLS){
+      for (const [dq,dr] of HEX_CHECK_DIRS){
+        const n = { q:c.q+dq, r:c.r+dr };
+        if (!(hexKey(n.q,n.r) in board)) continue;
+        swapHex(board, c, n);
+        const makesMatch = findMatches(board).size > 0;
+        swapHex(board, c, n); // undo the trial, board untouched
+        if (makesMatch) return { a:{q:c.q, r:c.r}, b:{q:n.q, r:n.r} };
+      }
+    }
+    return null;
+  }
+  api.findHint = findHint;
   /* === END TASK SECTION ml-4 === */
 
   return api;
