@@ -225,6 +225,20 @@
   // Each task adds its functions and exports (api.name = fn) inside its own
   // section only, so independent tasks do not edit the same lines.
   /* === TASK SECTION ml-1 seeded-rng (add task code and api.* exports here) === */
+  // Seeded generator (mulberry32): the same seed always yields the same stream,
+  // so a board dealt with it (createBoard/createPlayableBoard/rng-aware powers)
+  // can be reproduced exactly. Values are floats in [0, 1).
+  function createRng(seed = 1){
+    let state = seed >>> 0;
+    return function rng(){
+      state = (state + 0x6D2B79F5) >>> 0;
+      let t = state;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  api.createRng = createRng;
   /* === END TASK SECTION ml-1 === */
 
   /* === TASK SECTION ml-2 shuffle-in-place (add task code and api.* exports here) === */
