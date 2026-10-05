@@ -61,12 +61,21 @@
 
   /* ---------- Top bar ---------- */
   .topbar{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  /* The sound and effects toggles sit side by side in one group, like a pair. */
+  .topbar-toggles{display:flex; align-items:center; gap:8px;}
   .backbtn{
     width:38px; height:38px; border-radius:50%;
     background:var(--panel); color:var(--parchment);
     font-size:18px; display:flex; align-items:center; justify-content:center;
     border:1px solid rgba(231,184,75,0.25);
   }
+  /* Same look as .backbtn, only wide enough for its ON/OFF label. */
+  .backbtn.state-btn{width:auto; min-width:38px; padding:0 11px; gap:6px;}
+  .backbtn.state-btn .state{
+    font-family:'Inter',system-ui,sans-serif; font-size:10px; font-weight:800;
+    letter-spacing:0.08em; color:var(--parchment-dim);
+  }
+  .backbtn.state-btn[aria-pressed="true"] .state{ color:var(--gold-bright); }
   .gemcount{
     display:flex; align-items:center; gap:6px;
     background:var(--panel); border:1px solid rgba(231,184,75,0.3);
@@ -348,7 +357,12 @@
   <!-- HOME -->
   <section class="screen active" id="screen-home">
     <div class="topbar">
-      <button class="backbtn" id="sound-toggle" aria-label="Toggle sound">🔊</button>
+      <div class="topbar-toggles">
+        <button class="backbtn" id="sound-toggle" aria-label="Toggle sound">🔊</button>
+        <button class="backbtn state-btn" id="effects-toggle" aria-label="Effects" aria-pressed="true">
+          <span id="effects-icon">✨</span><span class="state" id="effects-state">ON</span>
+        </button>
+      </div>
       <div class="gemcount">💎 <span id="home-gems">500</span></div>
     </div>
     <div class="home-hero">
@@ -1672,6 +1686,39 @@ async function boot(){
   debugSync();
 }
 boot();
+
+// ==== ML-JUICE: effects switch ====
+/* The game's one shared effects setting. It is kept exactly the way the
+   sound setting is: a plain localStorage flag read when the script runs,
+   so turning effects off survives closing and reopening the game, while
+   a brand-new player (no flag saved) starts with effects on. */
+const EFFECTS_KEY = 'ml_effects';
+let effectsOn = (function(){
+  try{ return localStorage.getItem(EFFECTS_KEY) !== 'off'; }
+  catch(e){ return true; /* storage unavailable: assume on */ }
+})();
+
+// The current setting, and the switch that changes it.
+window.effectsEnabled = ()=> effectsOn;
+window.setEffectsEnabled = (on)=>{
+  effectsOn = !!on;
+  try{ localStorage.setItem(EFFECTS_KEY, effectsOn ? 'on' : 'off'); }catch(e){ /* non-fatal */ }
+  updateEffectsToggle();
+  return effectsOn;
+};
+
+// The button shows the setting itself: sparkle when on, moon when off, an
+// ON/OFF label, and aria-pressed so the state is announced as well as seen.
+function updateEffectsToggle(){
+  const btn = document.getElementById('effects-toggle');
+  btn.setAttribute('aria-pressed', effectsOn ? 'true' : 'false');
+  document.getElementById('effects-icon').textContent = effectsOn ? '✨' : '🌑';
+  document.getElementById('effects-state').textContent = effectsOn ? 'ON' : 'OFF';
+}
+document.getElementById('effects-toggle').addEventListener('click', ()=>{
+  window.setEffectsEnabled(!effectsOn);
+});
+updateEffectsToggle();
 </script>
 </body>
 </html>
