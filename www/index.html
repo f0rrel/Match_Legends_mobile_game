@@ -111,6 +111,7 @@
   .menu-btn small{display:block; font-family:'Inter',sans-serif; font-weight:500; font-size:12px; opacity:0.85; margin-top:2px; letter-spacing:0.01em;}
   .menu-btn.primary{background:linear-gradient(160deg, var(--gold-bright), var(--gold)); color:#2A1B08;}
   .menu-btn.secondary{background:linear-gradient(160deg, var(--crimson-bright), var(--crimson)); color:#2B0C09;}
+  .menu-btn.resume{background:linear-gradient(160deg, #5FD8AE, var(--emerald)); color:#08251B;}
 
   /* ---------- Avatar select ---------- */
   .avatar-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
@@ -331,6 +332,12 @@
       </div>
       <div class="change">Change</div>
     </div>
+    <!-- .menu-btn sets display:flex, which beats the [hidden] UA rule, so this
+         button is shown/hidden with an inline display instead. -->
+    <button class="menu-btn resume" id="btn-continue" style="display:none;">
+      <span class="emo">▶️</span>
+      <span id="btn-continue-label">Continue<small>Resume your unfinished trial</small></span>
+    </button>
     <button class="menu-btn primary" id="btn-goto-levels">
       <span class="emo">⚔️</span>
       <span>Solo Campaign<small>Beat targets, climb the ranks</small></span>
@@ -462,7 +469,7 @@ const TILE_ICONS = { sword:'⚔️', shield:'🛡️', urn:'🏺', crown:'👑',
 // Pure game logic (hex grid, matching, gravity, power targeting) lives in
 // www/js/match-logic.js so it can be unit tested.
 const {
-  BASE_POINTS, hexKey, HEX_CELLS, QCOLUMNS_BY_Q,
+  BASE_POINTS, TYPES, hexKey, HEX_CELLS, QCOLUMNS_BY_Q,
   isHexAdjacent, swapHex,
   findMatches, hasPossibleMove, createPlayableBoard, computeCollapse, findHint,
 } = window.MatchLogic;
@@ -667,6 +674,13 @@ const Storage = {
       catch(e){ /* native storage unavailable; fall back to localStorage */ }
     }
     try{ localStorage.setItem(key, json); }catch(e){ /* non-fatal */ }
+  },
+  async clear(key){
+    if (window.storage){
+      try{ await window.storage.remove(key); return; }
+      catch(e){ /* native storage unavailable; fall back to localStorage */ }
+    }
+    try{ localStorage.removeItem(key); }catch(e){ /* non-fatal */ }
   }
 };
 
@@ -819,12 +833,80 @@ function freshRenderBoard(board){
   return map;
 }
 
-function startSoloLevel(levelId){
+/* =========================================================
+   UNFINISHED LEVEL RESUME (Storage key 'ml_session')
+   The solo level being played is written to storage after
+   every move, so closing the game mid-level costs nothing: the
+   home screen offers a Continue button that picks the level up
+   exactly where it was left. A level that ends (win or loss)
+   clears the record.
+========================================================= */
+const SESSION_KEY = 'ml_session';
+let savedSession = null; // the record the home screen's Continue button offers
+
+// A saved record is only resumable if it still describes a whole, playable level.
+function isResumableSession(rec){
+  if (!rec || typeof rec !== 'object') return false;
+  if (!LEVELS.some(l => l.id === rec.levelId)) return false;
+  if (!rec.board || typeof rec.board !== 'object') return false;
+  if (HEX_CELLS.some(c => !TYPES.includes(rec.board[hexKey(c.q,c.r)]))) return false;
+  const count = n => Number.isFinite(n) && n >= 0;
+  return count(rec.score) && count(rec.movesLeft) && count(rec.charge);
+}
+
+// Write the level currently being played to storage (and to the home button).
+function saveSoloSession(){
+  if (!session || session.mode !== 'solo') return;
+  savedSession = {
+    levelId: session.level.id,
+    board: { ...session.board },
+    score: session.score,
+    movesLeft: session.movesLeft,
+    charge: session.charge,
+  };
+  Storage.save(SESSION_KEY, savedSession);
+  updateContinueButton();
+}
+
+// The level is over (or was never resumable): nothing left to continue.
+function clearSavedSession(){
+  savedSession = null;
+  Storage.clear(SESSION_KEY);
+  updateContinueButton();
+}
+
+// Show the Continue button only while there is a level to resume, named after it.
+function updateContinueButton(){
+  const btn = document.getElementById('btn-continue');
+  const lvl = savedSession ? LEVELS.find(l => l.id === savedSession.levelId) : null;
+  if (!lvl){ btn.style.display = 'none'; return; }
+  document.getElementById('btn-continue-label').innerHTML =
+    `Continue Level ${lvl.id}<small>${lvl.story.place}</small>`;
+  btn.style.display = 'flex';
+}
+
+// Pick the saved level back up at startup; anything unusable is dropped.
+async function loadSavedSession(){
+  const rec = await Storage.load(SESSION_KEY, null);
+  savedSession = isResumableSession(rec) ? rec : null;
+  if (rec && !savedSession) Storage.clear(SESSION_KEY);
+  updateContinueButton();
+}
+
+// Begin a solo level. `saved` is a record from 'ml_session': it resumes the
+// interrupted attempt exactly as it was left; without one a fresh board is dealt.
+function startSoloLevel(levelId, saved){
   const lvl = LEVELS.find(l=>l.id===levelId);
+  if (!lvl) return;
+  const resumed = isResumableSession(saved) && saved.levelId === lvl.id;
   const chapterTitle = `Chapter ${lvl.id}: ${lvl.story.place}`;
   session = {
-    mode:'solo', level: lvl, board: createPlayableBoard(), score:0, movesLeft: lvl.moves,
-    charge:0, elMap:null, busy:false, selected:null,
+    mode:'solo', level: lvl,
+    board: resumed ? { ...saved.board } : createPlayableBoard(),
+    score: resumed ? saved.score : 0,
+    movesLeft: resumed ? saved.movesLeft : lvl.moves,
+    charge: resumed ? saved.charge : 0,
+    elMap:null, busy:false, selected:null,
     scoreBuffUses:0, scoreBuffMult:1, chargeBuffUses:0, chargeBuffMult:1
   };
   document.getElementById('solo-hud').style.display = 'flex';
@@ -838,6 +920,7 @@ function startSoloLevel(levelId){
     updateSoloHud();
     updatePowerUI();
   });
+  saveSoloSession();
 }
 
 function startBattle(){
@@ -993,7 +1076,8 @@ async function attemptSwap(a, b){
   if (session.mode === 'solo'){
     session.movesLeft -= 1;
     updateSoloHud();
-    checkSoloEnd();
+    // A level still in play stays resumable; one that just ended has been cleared.
+    if (!checkSoloEnd()) saveSoloSession();
   } else {
     updateBattleHud();
     if (session.score >= BATTLE_TARGET) { session.busy=false; endBattle(true); return; }
@@ -1109,8 +1193,11 @@ async function animateCollapse(plan){
   await sleep(170);
 }
 
+// Ends the level once the target is met or the moves run out, clearing the saved
+// session. Returns true when the level is over, false while it is still in play.
 function checkSoloEnd(){
   if (session.score >= session.level.target){
+    clearSavedSession();
     appState.maxLevelUnlocked = Math.max(appState.maxLevelUnlocked, session.level.id+1);
     const gained = 40;
     appState.gems += gained; persistProgress(); updateGemDisplays();
@@ -1120,7 +1207,9 @@ function checkSoloEnd(){
       primaryLabel: session.level.id < LEVELS.length ? 'Next Level' : 'Back to Levels',
       primaryAction: ()=> session.level.id < LEVELS.length ? startSoloLevel(session.level.id+1) : goto('screen-levels', renderLevelGrid)
     });
+    return true;
   } else if (session.movesLeft <= 0){
+    clearSavedSession();
     const gained = 5;
     appState.gems += gained; persistProgress(); updateGemDisplays();
     showResults({
@@ -1129,7 +1218,9 @@ function checkSoloEnd(){
       primaryLabel:'Retry Level',
       primaryAction: ()=>startSoloLevel(session.level.id)
     });
+    return true;
   }
+  return false;
 }
 
 /* =========================================================
@@ -1191,7 +1282,7 @@ document.getElementById('power-btn').addEventListener('click', async ()=>{
       break;
     }
     case 'extraMoves': {
-      if (session.mode==='solo'){ session.movesLeft += 5; updateSoloHud(); }
+      if (session.mode==='solo'){ session.movesLeft += 5; updateSoloHud(); saveSoloSession(); }
       else { session.timeLeft += 8; updateBattleHud(); }
       session.scoreBuffUses = 5; session.scoreBuffMult = 2;
       showToast(av.powerName + ' unleashed! 2x score for 5 matches');
@@ -1216,7 +1307,7 @@ document.getElementById('power-btn').addEventListener('click', async ()=>{
   if (matched.size > 0){
     await resolveCascade(matched, 1);
   }
-  if (session.mode==='solo'){ updateSoloHud(); checkSoloEnd(); }
+  if (session.mode==='solo'){ updateSoloHud(); if (!checkSoloEnd()) saveSoloSession(); }
   else { updateBattleHud(); if (session.score >= BATTLE_TARGET){ session.busy=false; endBattle(true); return; } }
   session.busy = false;
 });
@@ -1328,6 +1419,10 @@ document.getElementById('btn-game-back').addEventListener('click', ()=>{
 document.getElementById('home-avatar-strip').addEventListener('click', ()=> goto('screen-avatars', renderAvatarGrid));
 document.getElementById('home-avatar-strip').addEventListener('keydown', (e)=>{ if(e.key==='Enter') goto('screen-avatars', renderAvatarGrid); });
 document.getElementById('btn-goto-levels').addEventListener('click', ()=> goto('screen-levels', renderLevelGrid));
+document.getElementById('btn-continue').addEventListener('click', ()=>{
+  if (!savedSession) return;
+  startSoloLevel(savedSession.levelId, savedSession);
+});
 document.getElementById('btn-goto-battle').addEventListener('click', ()=> startBattle());
 document.getElementById('sound-toggle').addEventListener('click', ()=>{
   Sound.enabled = !Sound.enabled;
@@ -1368,6 +1463,7 @@ async function boot(){
   }
   updateGemDisplays();
   updateHomeAvatar();
+  await loadSavedSession();
 }
 boot();
 </script>
