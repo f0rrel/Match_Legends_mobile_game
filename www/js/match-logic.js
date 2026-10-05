@@ -231,6 +231,17 @@
   /* === END TASK SECTION ml-2 === */
 
   /* === TASK SECTION ml-3 scoring-rules (add task code and api.* exports here) === */
+  function scoreMatch({ size, maxRun, combo, buffMult }) {
+    const run = typeof maxRun === 'number' && maxRun > 0 ? maxRun : 3;
+    const sizeBonus = run >= 5 ? 2 : (run >= 4 ? 1.5 : 1);
+    const base = size * BASE_POINTS * combo * sizeBonus;
+    let gained = Math.round(base);
+    if (buffMult !== undefined && buffMult !== null) {
+      gained = Math.round(gained * buffMult);
+    }
+    return gained;
+  }
+  api.scoreMatch = scoreMatch;
   /* === END TASK SECTION ml-3 === */
 
   /* === TASK SECTION ml-4 hint (add task code and api.* exports here) === */

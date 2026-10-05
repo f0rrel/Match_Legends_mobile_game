@@ -996,7 +996,12 @@ async function resolveCascade(firstMatch, comboStart){
     let maxRun = 3;
     matched.forEach(key=>{ maxRun = Math.max(maxRun, (matched.runLen && matched.runLen[key]) || 3); });
     const sizeBonus = maxRun>=5 ? 2 : (maxRun>=4 ? 1.5 : 1);
-    let gained = Math.round(matched.size * BASE_POINTS * combo * sizeBonus);
+    let gained;
+    if (window.MatchLogic && typeof window.MatchLogic.scoreMatch === 'function') {
+      gained = window.MatchLogic.scoreMatch({ size: matched.size, maxRun, combo });
+    } else {
+      gained = Math.round(matched.size * BASE_POINTS * combo * sizeBonus);
+    }
     if (session.scoreBuffUses > 0){ gained = Math.round(gained*session.scoreBuffMult); session.scoreBuffUses--; }
     session.score += gained;
     let chargeGain = matched.size;
