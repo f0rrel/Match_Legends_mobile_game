@@ -1070,8 +1070,15 @@ function spawnScorePopup(matchedSet, points, combo){
    GAME SESSION
 ========================================================= */
 let session = null; // active game session object
+// The beats the last resolveCascade() actually played, one per clearing step,
+// copied from MatchLogic.matchBeat(run) as they were played.
+let cascadeBeats = [];
 // Read-only hook for the automated tests (tests/smoke, tests/tasks).
-window.__ML_TEST__ = { session: () => session, appState: () => appState };
+window.__ML_TEST__ = {
+  session: () => session,
+  appState: () => appState,
+  lastBeats: () => cascadeBeats.map(b => ({ ...b })),
+};
 let tileKeySeq = 1;
 
 /* =========================================================
@@ -1378,6 +1385,7 @@ async function animateSwap(a,b, revert){
 }
 
 async function resolveCascade(firstMatch, comboStart){
+  cascadeBeats = [];
   let matched = firstMatch;
   let combo = comboStart;
   while (matched.size > 0){
@@ -1385,6 +1393,10 @@ async function resolveCascade(firstMatch, comboStart){
     const av = selectedAvatar();
     let maxRun = 3;
     matched.forEach(key=>{ maxRun = Math.max(maxRun, (matched.runLen && matched.runLen[key]) || 3); });
+    // The beat this clearing step plays, straight from the logic's table: the
+    // tiles swell, then pop, and only then may the board start falling.
+    const beat = window.MatchLogic.matchBeat(maxRun);
+    cascadeBeats.push({ run: maxRun, ...beat });
     const sizeBonus = maxRun>=5 ? 2 : (maxRun>=4 ? 1.5 : 1);
     let gained;
     if (window.MatchLogic && typeof window.MatchLogic.scoreMatch === 'function') {
@@ -1412,10 +1424,10 @@ async function resolveCascade(firstMatch, comboStart){
       if (el) clearedEls.push(el);
     });
     playClearPop(clearedEls);
-    await sleep(180);
+    await sleep(beat.swell + beat.pop);
     // compute collapse plan and animate fall
     const plan = computeCollapse(session.board, matched);
-    await animateCollapse(plan, clearedEls);
+    await animateCollapse(plan, clearedEls, beat.fall);
     matched = findMatches(session.board);
     combo += 1;
     if (session.mode==='solo') updateSoloHud(); else updateBattleHud();
@@ -1447,7 +1459,7 @@ async function reshuffleIfStuck(){
   return true;
 }
 
-async function animateCollapse(plan, clearedEls = []){
+async function animateCollapse(plan, clearedEls = [], fallMs = 170){
   const newMap = {};
   const incoming = [];
   for (const item of plan){
@@ -1479,7 +1491,7 @@ async function animateCollapse(plan, clearedEls = []){
     positionHexTile(session.elMap[key], q, r);
   });
   incoming.forEach(el=>{ el.style.opacity=''; el.classList.remove('spawning'); });
-  await sleep(170);
+  await sleep(fallMs);
 }
 
 // Ends the level once the target is met or the moves run out, clearing the saved
