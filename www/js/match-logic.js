@@ -351,5 +351,28 @@
   api.starsForScore = starsForScore;
   /* === END TASK SECTION ml-8 === */
 
+  /* === TASK SECTION ml-22 match-beat-table (add task code and api.* exports here) === */
+  // How long a clearing match swells, pops and falls, in milliseconds, keyed by
+  // match size (the longest run it contains). A plain 3-match just pops and falls
+  // inside the 0.4-0.6 s the direction asks for; runs of 4 and 5+ earn a short
+  // swell before the burst, topping out under the ~1 s cap for a big moment.
+  // Sizes beyond 5 share the biggest beat, and anything below 3 (or not a number
+  // at all) falls back to the 3-match beat instead of throwing.
+  const MATCH_BEATS = Object.freeze({
+    3: Object.freeze({ swell: 0,   pop: 220, fall: 200 }),
+    4: Object.freeze({ swell: 140, pop: 300, fall: 220 }),
+    5: Object.freeze({ swell: 180, pop: 380, fall: 240 }),
+  });
+  function matchBeat(maxRun){
+    const run = typeof maxRun === 'number' && isFinite(maxRun) && maxRun >= 4 ? Math.floor(maxRun) : 3;
+    const key = run >= 5 ? 5 : run;
+    const beat = MATCH_BEATS[key];
+    // Fresh copy every call: a caller mutating the result never touches the table.
+    return { swell: beat.swell, pop: beat.pop, fall: beat.fall, total: beat.swell + beat.pop + beat.fall };
+  }
+  api.MATCH_BEATS = MATCH_BEATS;
+  api.matchBeat = matchBeat;
+  /* === END TASK SECTION ml-22 === */
+
   return api;
 });
