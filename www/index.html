@@ -1405,6 +1405,10 @@ async function resolveCascade(firstMatch, comboStart){
     // tiles swell, then pop, and only then may the board start falling.
     const beat = window.MatchLogic.matchBeat(maxRun);
     cascadeBeats.push({ run: maxRun, ...beat });
+    // How big this step's burst is, straight from findMatches() when the step
+    // came from a match; a power-cleared set carries no class of its own, so it
+    // is read from the same longest run the score below already used.
+    const burstClass = matched.burstClass || (maxRun >= 5 ? 'huge' : (maxRun >= 4 ? 'big' : 'normal'));
     const sizeBonus = maxRun>=5 ? 2 : (maxRun>=4 ? 1.5 : 1);
     let gained;
     if (window.MatchLogic && typeof window.MatchLogic.scoreMatch === 'function') {
@@ -1437,7 +1441,7 @@ async function resolveCascade(firstMatch, comboStart){
     const motionWanted = matchPopWanted();
     if (motionWanted && beat.swell > 0) await sleep(beat.swell);
     const popStartedAt = performance.now();
-    playClearPop(clearedEls);
+    playClearPop(clearedEls, burstClass);
     // The fall only ever starts once the burst has actually finished: the later
     // of the popped tiles' own animationend and beat.pop, backed up by +60ms so
     // the cascade can never hang on a tile that stopped reporting.
@@ -2059,7 +2063,10 @@ function matchPopWanted(){
 }
 
 // Pop each of these tiles, and take the class off again as soon as its pop ends.
-function playClearPop(els){
+// Every tile is told how big its match was (data-burst: normal, big or huge) a
+// moment before the class lands, so the pop it plays can be read off the element;
+// the attribute is taken off with the class, so it never outlives the pop either.
+function playClearPop(els, burstClass){
   if (!matchPopWanted()) return;
   for (const el of els){
     if (!el || !el.classList) continue;
@@ -2072,8 +2079,10 @@ function playClearPop(els){
       matchPopTimers.delete(el);
       el.removeEventListener('animationend', done);
       el.classList.remove(MATCH_POP_CLASS);
+      if (el.dataset) delete el.dataset.burst;
     };
     el.addEventListener('animationend', done);
+    if (el.dataset) el.dataset.burst = burstClass;
     el.classList.add(MATCH_POP_CLASS);
     timer = setTimeout(done, MATCH_POP_BACKSTOP_MS); // only if the pop never reported
     matchPopTimers.set(el, timer);

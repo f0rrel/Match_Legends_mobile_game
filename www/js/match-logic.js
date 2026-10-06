@@ -108,6 +108,13 @@
       }
     });
     matched.runLen = runLen;
+    // How big this match may burst, read from the longest straight run it
+    // contains: a plain 3-run bursts normal, a 4-run bursts big, a 5+ run huge.
+    // Only cells that are really on the board count — an empty board has no
+    // run to report and falls back to normal.
+    let maxRun = 0;
+    for (const key in runLen) if (board && key in board && runLen[key] > maxRun) maxRun = runLen[key];
+    matched.burstClass = maxRun >= 5 ? 'huge' : (maxRun >= 4 ? 'big' : 'normal');
     return matched;
   }
   function hasPossibleMove(board){
