@@ -28,6 +28,13 @@
   /* Solid currentColor marks: eyes, grins, brows. */
   const IN = 'fill="currentColor" stroke="none"';
 
+  /* Same as OUT but with the stroke weight chosen per path, so the
+     attribute never appears twice on one element (XML forbids it). */
+  function outline(width) {
+    return 'fill="none" stroke="currentColor" stroke-width="' + width +
+      '" stroke-linecap="round" stroke-linejoin="round"';
+  }
+
   const DRAWINGS = {};
 
   /* ---- sword: a little sword imp ----
@@ -48,6 +55,30 @@
     '<path ' + OUT + ' stroke-width="9" d="M31 44 Q50 34 69 44"/>',
     '<path ' + IN + ' d="M35 55 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0 M55 55 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0"/>',
     '<path ' + OUT + ' stroke-width="6" d="M41 72 Q50 79 59 72"/>'
+  ];
+
+  /* ---- urn: a wobbly urn ghost ----
+     Wide lid lip overhanging rounded vessel shoulders, a bulbous body
+     that fades into a floaty wavy hem instead of feet, dot eyes and a
+     soft grin. Two little wisps wave where arms would be. */
+  DRAWINGS.urn = [
+    '<path ' + OUT + ' d="M30 8 L70 8 Q75 8 75 13 Q75 18 71 19 L68 23 C80 31 84 47 82 62 C80 76 75 85 70 87 C72 94 64 97 60 90 C57 96 51 96 48 90 C45 96 39 96 36 90 C32 97 24 94 27 87 C22 85 17 76 16 62 C14 47 18 31 32 23 L29 19 Q25 18 25 13 Q25 8 30 8 Z"/>',
+    '<path ' + outline(6) + ' d="M32 24 Q50 30 68 24"/>',
+    '<path ' + outline(6) + ' d="M17 54 Q6 58 9 68 Q12 75 20 72 M83 54 Q94 58 91 68 Q88 75 80 72"/>',
+    '<path ' + IN + ' d="M36 50 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0 M54 50 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0"/>',
+    '<path ' + outline(6) + ' d="M37 66 Q50 78 63 66"/>'
+  ];
+
+  /* ---- crown: a haughty crown-king imp ----
+     Squared crown head: three points on top with a band across the
+     brow, a small tapering body, dot eyes, a long wedge nose and a
+     wide smug mouth curled up on one side. */
+  DRAWINGS.crown = [
+    '<path ' + OUT + ' d="M8 16 L28 36 L50 6 L72 36 L92 16 L88 42 Q88 46 84 46 L80 50 Q78 76 66 87 Q59 94 50 94 Q41 94 34 87 Q22 76 20 50 L16 46 Q12 46 12 42 Z"/>',
+    '<path ' + outline(7) + ' d="M14 43 L86 43"/>',
+    '<path ' + IN + ' d="M36 53 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0 M56 53 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0"/>',
+    '<path ' + IN + ' d="M46 61 L54 61 L50 74 Z"/>',
+    '<path ' + outline(6) + ' d="M39 82 Q50 89 61 80"/>'
   ];
 
   function monsterTileSVG(type) {
