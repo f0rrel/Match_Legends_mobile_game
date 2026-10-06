@@ -293,10 +293,21 @@
 
      The base .tile.matchPop rule and its keyframe are the fallback for a tile
      with no type -- and for any type a later update might add; each typed rule
-     below takes the same shape over with its own keyframes. All seven run 180ms,
+     below takes the same shape over with its own keyframes. Those seven run 180ms,
      inside the clearing beat they always had and well under the 400ms no pop may
      exceed, and every one of them ends on scale:0 with opacity:0, so the tile
-     still visibly leaves the board. */
+     still visibly leaves the board.
+
+     A bigger match bursts bigger: the two rules at the end of the block read the
+     burst class the tile already wears while it pops (data-burst: big for a run
+     of 4, huge for a run of 5+) and take the pop over from the per-monster one.
+     Each swells for the first quarter with a bright flash, and only then bursts
+     away to scale:0 with opacity:0 -- and each runs exactly as long as
+     MatchLogic.matchBeat(4)/(5) asks for, swell + pop spelled out in ms:
+     140+300 = 440ms for big, 180+380 = 560ms for huge, which still keeps a 5+
+     match inside the ~1 s cap. They are written after the per-monster rules and
+     repeat them with [data-burst][data-type] (0,4,0), so the burst always beats
+     the monster pop (0,3,0); a tile with no burst keeps playing the pop above. */
   .tile.matchPop{ animation:matchPop .18s ease-out forwards; z-index:5; }
   @keyframes matchPop{
     0%{ scale:1; filter:brightness(1); }
@@ -355,6 +366,29 @@
     52%{ scale:0.8 1.2; rotate:190deg; filter:brightness(1.45); }
     76%{ scale:1.08 0.94; rotate:300deg; filter:brightness(1.9); }
     100%{ scale:0; rotate:360deg; opacity:0; }
+  }
+  /* big match (a run of 4): swells bright for the first quarter (110 of 440ms),
+     then bursts out. The 440ms is matchBeat(4).swell + matchBeat(4).pop.
+     Written after the per-monster pops and repeated with [data-burst][data-type],
+     so the burst wins over the monster pop of a typed tile (0,4,0 > 0,3,0).
+     Only scale, opacity and filter move: `translate` belongs to the hex
+     positioning, and the filter list stays the same shape at every stop so the
+     flash and the gold glow (the hint's own glow vocabulary) ramp smoothly. */
+  .tile.matchPop[data-burst="big"],
+  .tile.matchPop[data-burst="big"][data-type]{ animation:popBurstBig .44s ease-out forwards; }
+  @keyframes popBurstBig{
+    0%{ scale:1; opacity:1; filter:brightness(1) drop-shadow(0 0 0 transparent); animation-timing-function:ease-out; }
+    25%{ scale:1.2; opacity:1; filter:brightness(2.5) drop-shadow(0 0 9px var(--gold-bright)); animation-timing-function:ease-in; }
+    100%{ scale:0; opacity:0; filter:brightness(2.1) drop-shadow(0 0 4px var(--gold-bright)); }
+  }
+  /* huge match (a run of 5 or more): the same swell-then-burst a beat longer --
+     140 of 560ms at scale 1.25, then gone; 560ms is matchBeat(5).swell + pop. */
+  .tile.matchPop[data-burst="huge"],
+  .tile.matchPop[data-burst="huge"][data-type]{ animation:popBurstHuge .56s ease-out forwards; }
+  @keyframes popBurstHuge{
+    0%{ scale:1; opacity:1; filter:brightness(1) drop-shadow(0 0 0 transparent); animation-timing-function:ease-out; }
+    25%{ scale:1.25; opacity:1; filter:brightness(2.8) drop-shadow(0 0 12px var(--gold-bright)); animation-timing-function:ease-in; }
+    100%{ scale:0; opacity:0; filter:brightness(2.2) drop-shadow(0 0 5px var(--gold-bright)); }
   }
   .tile.spawning{ opacity:0; scale:0.3; }
 
@@ -1443,8 +1477,10 @@ async function resolveCascade(firstMatch, comboStart){
     const popStartedAt = performance.now();
     playClearPop(clearedEls, burstClass);
     // The fall only ever starts once the burst has actually finished: the later
-    // of the popped tiles' own animationend and beat.pop, backed up by +60ms so
-    // the cascade can never hang on a tile that stopped reporting.
+    // of the popped tiles' own animationend -- a big or huge burst swells and
+    // bursts inside its own, longer animation -- and beat.pop, backed up by a
+    // stall backstop past the longest pop so the cascade can never hang on a
+    // tile that stopped reporting.
     await waitBurstEnd(clearedEls, beat.pop, motionWanted);
     const popEndedAt = performance.now();
     // compute collapse plan and animate fall
@@ -1483,10 +1519,13 @@ async function reshuffleIfStuck(){
 }
 
 // Wait for the burst a clearing step just played: the later of the popped tiles'
-// own animationend and the beat's pop, with a backstop at pop + 60 ms so a tile
-// that never reports cannot stall the cascade. When no pop was wanted there is
+// own animationend and the beat's pop, with a backstop past the longest pop CSS
+// can play -- the huge burst, matchBeat(5).swell + pop = 560ms -- so a tile that
+// never reports cannot stall the cascade and a 4- or 5-match burst is never cut
+// short before it has shrunk off the board. When no pop was wanted there is
 // nothing to wait for -- no animation was played -- so the wait is a single
 // animation frame, the shortest the beat allows.
+const MAX_POP_MS = 560;
 function waitBurstEnd(els, popMs, wanted){
   if (!wanted){
     return new Promise(res=> requestAnimationFrame(res));
@@ -1510,7 +1549,7 @@ function waitBurstEnd(els, popMs, wanted){
     };
     els.forEach(el=> el.addEventListener('animationend', onEnd));
     const popTimer = setTimeout(()=>{ timed = true; check(); }, popMs);
-    const backstop = setTimeout(finish, popMs + 60);
+    const backstop = setTimeout(finish, Math.max(popMs, MAX_POP_MS) + 60);
   });
 }
 
@@ -2049,7 +2088,10 @@ updateEffectsToggle();
    where the tile has already left the DOM by then and no animation can report
    back, so the class can never stick to a tile that lives on. */
 const MATCH_POP_CLASS = 'matchPop';
-const MATCH_POP_BACKSTOP_MS = 320; // well past the 180ms pop: a safety net only
+// Well past the longest pop CSS can play -- the huge burst, 560ms from
+// matchBeat(5).swell + pop -- so a big or huge pop is never cut short; it is a
+// safety net only, the animationend above it is what normally ends the pop.
+const MATCH_POP_BACKSTOP_MS = 640;
 const matchPopTimers = new WeakMap();
 
 // Reduced motion wins. Otherwise the shared effects switch, when it is there.
