@@ -276,15 +276,75 @@
     50%{ scale:1.16; }
   }
   /* ==== ML-JUICE: tile clear pop ====
-     The pop a tile plays as it is cleared: it swells and flares, then snaps out.
-     The class is added by playClearPop() and taken off again when the pop ends,
-     so it never outlives the tile it belongs to. 180ms keeps the pop inside the
-     clearing beat it always had, well under the 400ms it must not exceed. */
+     The pop a tile plays as it is cleared, with one pop per monster: the class
+     is still the one playClearPop() adds and takes off again when the pop ends,
+     so it never outlives the tile it belongs to, and the type that decides the
+     tile's colour decides its pop too (data-type, already on every tile).
+
+     The base .tile.matchPop rule and its keyframe are the fallback for a tile
+     with no type -- and for any type a later update might add; each typed rule
+     below takes the same shape over with its own keyframes. All seven run 180ms,
+     inside the clearing beat they always had and well under the 400ms no pop may
+     exceed, and every one of them ends on scale:0 with opacity:0, so the tile
+     still visibly leaves the board. */
   .tile.matchPop{ animation:matchPop .18s ease-out forwards; z-index:5; }
   @keyframes matchPop{
     0%{ scale:1; filter:brightness(1); }
     30%{ scale:1.4; filter:brightness(1.9); }
     100%{ scale:0; opacity:0; }
+  }
+  /* sword imp -- a bite: jaws spring open and snap shut twice on the way out. */
+  .tile.matchPop[data-type="sword"]{ animation:popChomp .18s ease-out forwards; }
+  @keyframes popChomp{
+    0%{ scale:1 1; filter:brightness(1); }
+    18%{ scale:1.14 1.3; filter:brightness(1.7); }
+    38%{ scale:1.32 0.66; filter:brightness(1.15); }
+    58%{ scale:0.92 1.14; filter:brightness(1.5); }
+    100%{ scale:0 0; opacity:0; }
+  }
+  /* shield golem -- a bash squash: plants itself flat, then shoves back up. */
+  .tile.matchPop[data-type="shield"]{ animation:popBash .18s ease-out forwards; }
+  @keyframes popBash{
+    0%{ scale:1 1; filter:brightness(1); }
+    30%{ scale:1.46 0.54; filter:brightness(1.55); }
+    62%{ scale:0.82 1.24; filter:brightness(1.85); }
+    100%{ scale:0 0; opacity:0; }
+  }
+  /* urn ghost -- a wobbling fade: it rocks one way, then loosens mid-wiggle. */
+  .tile.matchPop[data-type="urn"]{ animation:popWobble .18s ease-out forwards; }
+  @keyframes popWobble{
+    0%{ scale:1; rotate:0deg; opacity:1; }
+    25%{ scale:1.1; rotate:-10deg; opacity:0.85; }
+    55%{ scale:1; rotate:9deg; opacity:0.5; }
+    78%{ scale:0.9; rotate:-5deg; opacity:0.28; }
+    100%{ scale:0; rotate:0deg; opacity:0; }
+  }
+  /* crown king -- a regal bow: dips its head, rises once, then takes its leave. */
+  .tile.matchPop[data-type="crown"]{ animation:popBow .18s ease-out forwards; }
+  @keyframes popBow{
+    0%{ scale:1; rotate:0deg; filter:brightness(1); }
+    34%{ scale:0.9; rotate:17deg; filter:brightness(1.6); }
+    64%{ scale:1.08; rotate:-7deg; filter:brightness(1.25); }
+    100%{ scale:0; rotate:0deg; opacity:0; }
+  }
+  /* flame ember -- a flash-up: one bright lick from its own base, then gone.
+     transform-origin pins that lick to the bottom edge, so it grows upward
+     instead of swelling over the tile below it. */
+  .tile.matchPop[data-type="flame"]{ animation:popFlare .18s ease-out forwards; transform-origin:50% 100%; }
+  @keyframes popFlare{
+    0%{ scale:1 1; filter:brightness(1); }
+    22%{ scale:1.16 1.5; filter:brightness(2.6); }
+    55%{ scale:0.86 1.1; filter:brightness(1.9); }
+    100%{ scale:0 0; opacity:0; }
+  }
+  /* gem sprite -- a shatter-spin: hard shard-flash, tumbling all the way out. */
+  .tile.matchPop[data-type="gem"]{ animation:popShatter .18s ease-out forwards; }
+  @keyframes popShatter{
+    0%{ scale:1; rotate:0deg; filter:brightness(1); }
+    24%{ scale:1.34 0.86; rotate:70deg; filter:brightness(2.2); }
+    52%{ scale:0.8 1.2; rotate:190deg; filter:brightness(1.45); }
+    76%{ scale:1.08 0.94; rotate:300deg; filter:brightness(1.9); }
+    100%{ scale:0; rotate:360deg; opacity:0; }
   }
   .tile.spawning{ opacity:0; scale:0.3; }
 
