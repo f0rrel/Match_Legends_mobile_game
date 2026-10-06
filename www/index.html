@@ -30,29 +30,32 @@
      block is the one place they are written down -- the tile rules below do
      nothing but paint from them, so a colour is changed here and nowhere else.
 
-     Each one is the colour the tiles used to wear, lightened 15% towards white
-     (HSL lightness 47% -> 55%, hue and saturation kept). That is a small,
-     deliberate lift rather than a glow, and because every type moved the same
-     distance the six stay exactly as far apart from one another as they were,
-     and as far from the dark board they sit on. */
+     Each one is the colour the tiles used to wear, lightened towards white with
+     hue and saturation kept: brighter than the old hard-coded value, and with
+     every type moved the same way they stay exactly as far apart from one
+     another as they were. A monster is now a thin currentColor outline on the
+     dark panel rather than a solid fill, so each value is read against that
+     panel -- every one clears 3:1 even at the panel's lightest corner (most are
+     well past 4:1), and flame, which is purple sitting on a purple board,
+     carries a bigger lift than the rest so it still reads. */
   :root{
     --tile-1:#5885C0; /* sword  */
     --tile-2:#C06E58; /* shield */
     --tile-3:#58C085; /* urn    */
     --tile-4:#C0AF58; /* crown  */
-    --tile-5:#9C58C0; /* flame  */
+    --tile-5:#B57BDA; /* flame  */
     --tile-6:#58C0C0; /* gem    */
   }
-  /* A typed tile wears its type's colour. The base .tile rule paints a gradient
-     over background-color, so that gradient is dropped for typed tiles only --
-     untyped ones, and .tile.selected, are left exactly as they were. */
-  .tile[data-type]{ background-image:none; }
-  .tile[data-type="sword"]{ background-color:var(--tile-1); }
-  .tile[data-type="shield"]{ background-color:var(--tile-2); }
-  .tile[data-type="urn"]{ background-color:var(--tile-3); }
-  .tile[data-type="crown"]{ background-color:var(--tile-4); }
-  .tile[data-type="flame"]{ background-color:var(--tile-5); }
-  .tile[data-type="gem"]{ background-color:var(--tile-6); }
+  /* A typed tile paints its type's colour onto the monster, not onto the
+     hexagon: the artwork strokes itself in currentColor, so `color` here is
+     the only colour the monster needs. The hexagon keeps the quiet dark
+     panel gradient from the base .tile rule underneath it. */
+  .tile[data-type="sword"]{ color:var(--tile-1); }
+  .tile[data-type="shield"]{ color:var(--tile-2); }
+  .tile[data-type="urn"]{ color:var(--tile-3); }
+  .tile[data-type="crown"]{ color:var(--tile-4); }
+  .tile[data-type="flame"]{ color:var(--tile-5); }
+  .tile[data-type="gem"]{ color:var(--tile-6); }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{height:100%;}
   body{
@@ -229,6 +232,13 @@
     will-change:translate;
     touch-action:none;
     user-select:none;
+  }
+  /* The monster artwork fills its hexagon and is drawn over the hex background,
+     inheriting the tile's own colour through currentColor. */
+  .tile > svg{
+    width:100%; height:100%; display:block;
+    position:relative; z-index:1;
+    pointer-events:none;
   }
   /* ==== ML-JUICE: idle wobble ====
      A gentle rock, so a still board breathes instead of sitting like one slab.
@@ -684,6 +694,8 @@
 /* =========================================================
    DATA
 ========================================================= */
+// Emoji labels. Tiles no longer wear these -- they draw MonsterTiles SVG art --
+// kept only for anything that still wants a plain text glyph.
 const TILE_ICONS = { sword:'⚔️', shield:'🛡️', urn:'🏺', crown:'👑', flame:'🔥', gem:'💎' };
 // Pure game logic (hex grid, matching, gravity, power targeting) lives in
 // www/js/match-logic.js so it can be unit tested.
@@ -982,7 +994,7 @@ function idleWobbleDelay(q, r){
 function tileEl(type, q, r, key){
   const d = document.createElement('div');
   d.className = 'tile';
-  d.textContent = TILE_ICONS[type];
+  d.innerHTML = MonsterTiles.monsterTileSVG(type);
   // data-type is what the tile colour rules in the CSS key off.
   d.dataset.q = q; d.dataset.r = r; d.dataset.key = key; d.dataset.type = type;
   // Only the idle wobble reads this; it changes nothing else about the tile.
@@ -1554,11 +1566,11 @@ document.getElementById('power-btn').addEventListener('click', async ()=>{
       const allKeys = Object.keys(session.board);
       matched = MatchLogic.convertTiles(session.board);
       const el = session.elMap;
-      // A reshaped tile is given a new icon, so it must wear the new type's
-      // colour too -- otherwise the two would disagree.
+      // A reshaped tile is given a new silhouette, so it must wear the new
+      // type's artwork and colour too -- otherwise the two would disagree.
       allKeys.forEach(key=>{
         const type = session.board[key];
-        el[key].textContent = TILE_ICONS[type];
+        el[key].innerHTML = MonsterTiles.monsterTileSVG(type);
         el[key].dataset.type = type;
       });
       if (session.mode==='solo'){ session.movesLeft += 2; updateSoloHud(); }
