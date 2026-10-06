@@ -81,6 +81,32 @@
     '<path ' + outline(6) + ' d="M39 82 Q50 89 61 80"/>'
   ];
 
+  /* ---- flame: a lively ember sprite ----
+      Licking flame head: one tall centre tip plus two side tongues,
+      a pinched waist with tiny pointed arms and two little feet,
+      wide bright eyes, a cheeky grin and two loose ember flicks
+      sparking off the sides. No flat crown, no round pot, no blade —
+      the wavy fire outline is its own silhouette. */
+  DRAWINGS.flame = [
+    '<path ' + OUT + ' d="M50 4 C57 13 61 18 63 23 C66 16 70 11 75 7 C77 20 79 30 79 40 C79 50 70 54 70 62 L82 65 L73 69 C79 74 79 80 76 84 L66 96 L56 86 C53 91 47 91 44 86 L34 96 L24 84 C21 80 21 74 27 69 L18 65 L30 62 C30 54 21 50 21 40 C20 32 21 24 24 16 C28 20 32 23 35 25 C39 20 44 13 50 4 Z"/>',
+    '<path ' + IN + ' d="M34 50 a5.5 5.5 0 1 0 11 0 a5.5 5.5 0 1 0 -11 0 M55 48 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0"/>',
+    '<path ' + outline(6) + ' d="M40 60 Q50 70 60 60"/>',
+    '<path ' + IN + ' d="M11 17 C7 25 8 33 11 37 C15 31 15 23 11 17 Z M90 31 C94 38 93 46 90 50 C86 44 86 36 90 31 Z"/>'
+  ];
+
+  /* ---- gem: a faceted gem sprite ----
+      Angular crystal body: flat top edge, chamfered corners, two sharp
+      arm spikes and a split crystal-foot hem instead of a round base.
+      Facet cuts across the crown, diamond sparkle eyes, a shy smile
+      and a little four-point sparkle gleaming on the forehead. */
+  DRAWINGS.gem = [
+    '<path ' + OUT + ' d="M34 8 L66 8 L84 26 L84 44 L92 54 L84 62 L74 82 L66 96 L56 88 L44 88 L34 96 L26 82 L16 62 L8 54 L16 44 L16 26 Z"/>',
+    '<path ' + outline(5) + ' d="M16 44 L84 44 M34 8 L36 44 M66 8 L64 44"/>',
+    '<path ' + IN + ' d="M36 56 L40 50 L44 56 L40 62 Z M56 56 L60 50 L64 56 L60 62 Z"/>',
+    '<path ' + outline(6) + ' d="M42 72 Q50 78 58 72"/>',
+    '<path ' + IN + ' d="M50 18 L52.5 22.5 L57 25 L52.5 27.5 L50 32 L47.5 27.5 L43 25 L47.5 22.5 Z"/>'
+  ];
+
   function monsterTileSVG(type) {
     const parts = Object.prototype.hasOwnProperty.call(DRAWINGS, type) ? DRAWINGS[type] : null;
     if (!parts) return '';
