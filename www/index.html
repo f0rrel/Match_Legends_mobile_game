@@ -230,6 +230,39 @@
     touch-action:none;
     user-select:none;
   }
+  /* ==== ML-JUICE: idle wobble ====
+     A gentle rock, so a still board breathes instead of sitting like one slab.
+     Only `rotate` is ever animated: `translate` belongs to the hex positioning
+     the script writes and `scale` belongs to the pop, and neither is touched.
+
+     The phase of each tile comes from --wobble-delay, a custom property set on
+     the element by tileEl() from the cell it was dealt into, so neighbouring
+     tiles are out of step. It is set once, at creation, because re-timing a
+     running animation would make the tile jump when gravity moves it.
+
+     Two gates:
+     reduced motion — the .tile rule exists only inside
+     prefers-reduced-motion: no-preference, so a player who asked for less
+     motion never gets an animation at all. The global rule further down only
+     shortens durations and would leave the animation named, so it is not
+     relied on here;
+     effects off — '.idle-off .tile' below, wearing a class that
+     updateEffectsToggle() puts on and takes off the body.
+
+     These rules sit above .tile.hint and .tile.matchPop on purpose: equal
+     specificity, so the later rules win and hint and pop keep overriding the
+     wobble exactly as they always took an animation over. */
+  @media (prefers-reduced-motion: no-preference){
+    .tile{
+      animation:idleWobble 2.6s ease-in-out infinite;
+      animation-delay:var(--wobble-delay, 0s);
+    }
+  }
+  .idle-off .tile{ animation:none; }
+  @keyframes idleWobble{
+    0%,100%{ rotate:-2deg; }
+    50%{ rotate:2deg; }
+  }
   .tile.selected{box-shadow:0 0 0 2px var(--gold-bright) inset; background:linear-gradient(160deg, #3A2560, var(--panel-2));}
   /* Hint: brightened, glowing and pulsing, so the suggested swap stands out
      through the hexagon clip-path (a box-shadow would be clipped away). */
@@ -873,12 +906,26 @@ function hexPixelCenter(q,r){
     y: hexOriginY + hexSize*1.5*r
   };
 }
+// ==== ML-JUICE: idle wobble ====
+/* The phase of a tile's idle wobble, taken from the cell it was dealt into so
+   that neighbours rock out of step and the board breathes rather than moving as
+   one slab. Every hex direction moves the cell at least one step in this mix,
+   so no two adjacent tiles can land on the same delay. Set once, when the tile
+   is created, and never re-derived: re-timing a running animation would make a
+   falling tile jump. */
+function idleWobbleDelay(q, r){
+  const STEPS = 11, STEP_S = 0.13;
+  const n = ((Number(q) || 0) * 7 + (Number(r) || 0) * 3) % STEPS;
+  return (((n % STEPS) + STEPS) % STEPS * STEP_S).toFixed(2) + 's';
+}
 function tileEl(type, q, r, key){
   const d = document.createElement('div');
   d.className = 'tile';
   d.textContent = TILE_ICONS[type];
   // data-type is what the tile colour rules in the CSS key off.
   d.dataset.q = q; d.dataset.r = r; d.dataset.key = key; d.dataset.type = type;
+  // Only the idle wobble reads this; it changes nothing else about the tile.
+  d.style.setProperty('--wobble-delay', idleWobbleDelay(q, r));
   positionHexTile(d, q, r);
   return d;
 }
@@ -1797,6 +1844,11 @@ function updateEffectsToggle(){
   btn.setAttribute('aria-pressed', effectsOn ? 'true' : 'false');
   document.getElementById('effects-icon').textContent = effectsOn ? '✨' : '🌑';
   document.getElementById('effects-state').textContent = effectsOn ? 'ON' : 'OFF';
+  // The switch is shared, so it speaks for the idle wobble too: 'idle-off' on
+  // the body is what the CSS in the ML-JUICE: idle wobble block looks for to
+  // stop the tiles rocking. Added here, next to the state it stands for, so
+  // every caller of this function keeps the board and the button in step.
+  document.body.classList.toggle('idle-off', !effectsOn);
 }
 document.getElementById('effects-toggle').addEventListener('click', ()=>{
   window.setEffectsEnabled(!effectsOn);
