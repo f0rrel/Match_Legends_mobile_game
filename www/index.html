@@ -1476,12 +1476,30 @@ async function attemptSwap(a, b){
   }
 }
 
+// A remembered swipe is only played if it still matches the board as it is
+// *now*: while the swipe waited, the board may have changed under it (a
+// cascade fell, a level restarted). The verdict is reached on a copy of the
+// board, so this check can never touch the real one.
+function swipeStillMatches(swipe){
+  if (!session || !swipe || !swipe.a || !swipe.b) return false;
+  const { a, b } = swipe;
+  // Either cell no longer on the board, or the pair not adjacent: nothing to play.
+  if (!(hexKey(a.q,a.r) in session.board)) return false;
+  if (!(hexKey(b.q,b.r) in session.board)) return false;
+  if (!isHexAdjacent(a,b)) return false;
+  const probe = { ...session.board };
+  swapHex(probe, a, b);
+  return findMatches(probe).size > 0;
+}
+
 async function flushQueuedSwap(){
   const swipe = queuedSwap;
   queuedSwap = null;
-  if (swipe) {
-    await attemptSwap(swipe.a, swipe.b);
-  }
+  if (!swipe) return;
+  // Stale swipe: dropped quietly -- no swap-and-back wiggle, no invalid-swap
+  // sound, no move or score change.
+  if (!swipeStillMatches(swipe)) return;
+  await attemptSwap(swipe.a, swipe.b);
 }
 
 async function animateSwap(a,b, revert){
