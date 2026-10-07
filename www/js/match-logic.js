@@ -98,7 +98,7 @@
       for (let i=1;i<=line.length;i++){
         const startKey = hexKey(line[start].q, line[start].r);
         const curKey = i<line.length ? hexKey(line[i].q, line[i].r) : null;
-        if (curKey && board[curKey]===board[startKey]) continue;
+        if (curKey && baseType(board[curKey])===baseType(board[startKey])) continue;
         const len = i-start;
         if (len>=3) for (let k=start;k<i;k++){
           const kk = hexKey(line[k].q, line[k].r);
@@ -380,6 +380,26 @@
   api.MATCH_BEATS = MATCH_BEATS;
   api.matchBeat = matchBeat;
   /* === END TASK SECTION ml-22 === */
+
+  /* === TASK SECTION ml-33 special-tiles (add task code and api.* exports here) === */
+  // A special tile is stored as `monster + '+' + kind` ('sword+line'): the
+  // monster half decides what it matches with, the kind half decides what it
+  // does when it fires. Plain tiles carry only the monster, so encoding and
+  // matching share one separator without ambiguity.
+  function makeSpecial(type, kind){ return type + '+' + kind; }
+  function baseType(tile){
+    const i = typeof tile === 'string' ? tile.indexOf('+') : -1;
+    return i === -1 ? tile : tile.slice(0, i);
+  }
+  function specialOf(tile){
+    if (typeof tile !== 'string') return null;
+    const i = tile.indexOf('+');
+    return i === -1 ? null : tile.slice(i + 1);
+  }
+  api.makeSpecial = makeSpecial;
+  api.baseType = baseType;
+  api.specialOf = specialOf;
+  /* === END TASK SECTION ml-33 === */
 
   return api;
 });
