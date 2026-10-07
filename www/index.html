@@ -293,10 +293,21 @@
 
      The base .tile.matchPop rule and its keyframe are the fallback for a tile
      with no type -- and for any type a later update might add; each typed rule
-     below takes the same shape over with its own keyframes. All seven run 180ms,
+     below takes the same shape over with its own keyframes. Those seven run 180ms,
      inside the clearing beat they always had and well under the 400ms no pop may
      exceed, and every one of them ends on scale:0 with opacity:0, so the tile
-     still visibly leaves the board. */
+     still visibly leaves the board.
+
+     A bigger match bursts bigger: the two rules at the end of the block read the
+     burst class the tile already wears while it pops (data-burst: big for a run
+     of 4, huge for a run of 5+) and take the pop over from the per-monster one.
+     Each swells for the first quarter with a bright flash, and only then bursts
+     away to scale:0 with opacity:0 -- and each runs exactly as long as
+     MatchLogic.matchBeat(4)/(5) asks for, swell + pop spelled out in ms:
+     140+300 = 440ms for big, 180+380 = 560ms for huge, which still keeps a 5+
+     match inside the ~1 s cap. They are written after the per-monster rules and
+     repeat them with [data-burst][data-type] (0,4,0), so the burst always beats
+     the monster pop (0,3,0); a tile with no burst keeps playing the pop above. */
   .tile.matchPop{ animation:matchPop .18s ease-out forwards; z-index:5; }
   @keyframes matchPop{
     0%{ scale:1; filter:brightness(1); }
@@ -356,6 +367,29 @@
     76%{ scale:1.08 0.94; rotate:300deg; filter:brightness(1.9); }
     100%{ scale:0; rotate:360deg; opacity:0; }
   }
+  /* big match (a run of 4): swells bright for the first quarter (110 of 440ms),
+     then bursts out. The 440ms is matchBeat(4).swell + matchBeat(4).pop.
+     Written after the per-monster pops and repeated with [data-burst][data-type],
+     so the burst wins over the monster pop of a typed tile (0,4,0 > 0,3,0).
+     Only scale, opacity and filter move: `translate` belongs to the hex
+     positioning, and the filter list stays the same shape at every stop so the
+     flash and the gold glow (the hint's own glow vocabulary) ramp smoothly. */
+  .tile.matchPop[data-burst="big"],
+  .tile.matchPop[data-burst="big"][data-type]{ animation:popBurstBig .44s ease-out forwards; }
+  @keyframes popBurstBig{
+    0%{ scale:1; opacity:1; filter:brightness(1) drop-shadow(0 0 0 transparent); animation-timing-function:ease-out; }
+    25%{ scale:1.2; opacity:1; filter:brightness(2.5) drop-shadow(0 0 9px var(--gold-bright)); animation-timing-function:ease-in; }
+    100%{ scale:0; opacity:0; filter:brightness(2.1) drop-shadow(0 0 4px var(--gold-bright)); }
+  }
+  /* huge match (a run of 5 or more): the same swell-then-burst a beat longer --
+     140 of 560ms at scale 1.25, then gone; 560ms is matchBeat(5).swell + pop. */
+  .tile.matchPop[data-burst="huge"],
+  .tile.matchPop[data-burst="huge"][data-type]{ animation:popBurstHuge .56s ease-out forwards; }
+  @keyframes popBurstHuge{
+    0%{ scale:1; opacity:1; filter:brightness(1) drop-shadow(0 0 0 transparent); animation-timing-function:ease-out; }
+    25%{ scale:1.25; opacity:1; filter:brightness(2.8) drop-shadow(0 0 12px var(--gold-bright)); animation-timing-function:ease-in; }
+    100%{ scale:0; opacity:0; filter:brightness(2.2) drop-shadow(0 0 5px var(--gold-bright)); }
+  }
   .tile.spawning{ opacity:0; scale:0.3; }
 
   .power-flash{
@@ -370,15 +404,31 @@
   }
   .board-wrap.shake{ animation:boardShake .32s ease; }
 
-  .combo-burst{
-    position:absolute; left:50%; top:50%; translate:-50% -50%; scale:0.3;
-    font-family:'Cinzel',serif; font-weight:900; font-size:26px; color:var(--gold-bright);
-    text-shadow:0 0 20px rgba(247,215,122,0.8), 0 4px 10px rgba(0,0,0,0.6);
+  /* ==== ML-JUICE: match callout ====
+     One short line over the middle of the board saying what the match just did
+     ('3-MATCH', '4-MATCH', '5-MATCH!', 'COMBO x2', 'COMBO x3!'). Exactly one
+     element ever exists: the cascade re-uses it while it is still showing,
+     restarting the animation, and the script drops it just after the run ends.
+     The animation lives on the bare class (a fresh element animates on its own),
+     is 700 ms total — in, hold, gone — and only moves opacity and scale, so the
+     centring `translate` underneath is never touched. */
+  .match-callout{
+    position:absolute; left:50%; top:50%; translate:-50% -50%;
+    font-family:'Cinzel',serif; font-weight:900;
+    font-size:clamp(18px, 6.4vw, 30px); line-height:1.1;
+    color:var(--gold-bright); padding:6px 16px; border-radius:999px;
+    background:rgba(21,14,39,0.78); border:1px solid rgba(247,215,122,0.55);
+    text-shadow:0 0 16px rgba(247,215,122,0.75), 0 2px 6px rgba(0,0,0,0.8);
     opacity:0; pointer-events:none; z-index:10; text-align:center; white-space:nowrap;
-    transition:scale .3s cubic-bezier(.34,2.2,.64,1), opacity .3s ease;
+    animation:matchCallout .7s ease-out forwards;
   }
-  .combo-burst.pop{ scale:1; opacity:1; }
-  .combo-burst.fade{ scale:1.15; opacity:0; }
+  @keyframes matchCallout{
+    0%{ opacity:0; scale:.45; }
+    20%{ opacity:1; scale:1.12; animation-timing-function:ease-out; }
+    34%{ scale:1; }
+    70%{ opacity:1; scale:1; animation-timing-function:ease-in; }
+    100%{ opacity:0; scale:1.2; }
+  }
 
   .power-row{display:flex; align-items:center; gap:14px; margin-top:auto;}
   .power-ring-btn{
@@ -994,9 +1044,14 @@ function idleWobbleDelay(q, r){
 function tileEl(type, q, r, key){
   const d = document.createElement('div');
   d.className = 'tile';
-  d.innerHTML = MonsterTiles.monsterTileSVG(type);
+  // The board stores a special as 'monster+kind'; the artwork and the colour
+  // rules key off the monster half only, the kind is marked separately.
+  const base = MatchLogic.baseType(type);
+  d.innerHTML = MonsterTiles.monsterTileSVG(base);
   // data-type is what the tile colour rules in the CSS key off.
-  d.dataset.q = q; d.dataset.r = r; d.dataset.key = key; d.dataset.type = type;
+  d.dataset.q = q; d.dataset.r = r; d.dataset.key = key; d.dataset.type = base;
+  const special = MatchLogic.specialOf(type);
+  if (special) d.dataset.special = special;
   // Only the idle wobble reads this; it changes nothing else about the tile.
   d.style.setProperty('--wobble-delay', idleWobbleDelay(q, r));
   positionHexTile(d, q, r);
@@ -1016,14 +1071,27 @@ function showToast(msg){
   clearTimeout(showToast._t);
   showToast._t = setTimeout(()=>t.classList.remove('show'), 1600);
 }
-function spawnComboBurst(text){
-  const el = document.createElement('div');
-  el.className = 'combo-burst';
-  el.textContent = text;
-  boardEl.appendChild(el);
-  requestAnimationFrame(()=> el.classList.add('pop'));
-  setTimeout(()=> el.classList.add('fade'), 380);
-  setTimeout(()=> el.remove(), 680);
+/* The single callout over the board. It is created on demand, re-used (and its
+   animation restarted) while it is still on screen, and removed just after the
+   animation has run out, so a cascade never puts a second one on screen. */
+function showMatchCallout(text){
+  let el = boardEl.querySelector('.match-callout');
+  if (!el){
+    el = document.createElement('div');
+    el.className = 'match-callout';
+    el.textContent = text;
+    boardEl.appendChild(el);
+  } else {
+    el.textContent = text;
+    // restart the run: pull the animation off, force a reflow, put it back
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = '';
+  }
+  const drop = ()=>{ if (el.isConnected) el.remove(); };
+  el.onanimationend = drop;
+  clearTimeout(showMatchCallout._t);
+  showMatchCallout._t = setTimeout(drop, 820);
 }
 function screenShake(){
   boardWrapEl.classList.remove('shake');
@@ -1070,8 +1138,36 @@ function spawnScorePopup(matchedSet, points, combo){
    GAME SESSION
 ========================================================= */
 let session = null; // active game session object
+// The one swipe the player made while the board was busy: the most recent
+// real drag is kept, any older waiting one is replaced. Not played yet (ml-31).
+let queuedSwap = null;
+// The beats the last resolveCascade() actually played, one per clearing step,
+// copied from MatchLogic.matchBeat(run) as they were played.
+let cascadeBeats = [];
+// The same steps again, with the timings of the burst and the fall that played:
+// for each clearing step when the pop went on, when its burst ended and only
+// then when the collapse began, and when the fall animation was over. All in ms
+// from performance.now(). This is where the "no tile falls before its match has
+// burst" rule is exposed to the tests.
+let lastCascadeRecord = [];
 // Read-only hook for the automated tests (tests/smoke, tests/tasks).
-window.__ML_TEST__ = { session: () => session, appState: () => appState };
+window.__ML_TEST__ = {
+  session: () => session,
+  appState: () => appState,
+  lastBeats: () => cascadeBeats.map(b => ({ ...b })),
+  lastCascade: () => lastCascadeRecord.map(e => ({ ...e })),
+  // How many swipes are waiting to be played once the board is free.
+  queuedSwaps: () => (queuedSwap ? 1 : 0),
+  // Put a board (specials included) straight into the level in play and repaint
+  // it, so a test can set up a position no deal would ever hand out.
+  setBoard: (board) => {
+    if (!session || !board || typeof board !== 'object') return null;
+    session.board = { ...board };
+    session.elMap = freshRenderBoard(session.board);
+    bindBoardEvents();
+    return Object.keys(session.board).length;
+  },
+};
 let tileKeySeq = 1;
 
 /* =========================================================
@@ -1115,7 +1211,7 @@ function isResumableSession(rec){
   if (!rec || typeof rec !== 'object') return false;
   if (!LEVELS.some(l => l.id === rec.levelId)) return false;
   if (!rec.board || typeof rec.board !== 'object') return false;
-  if (HEX_CELLS.some(c => !TYPES.includes(rec.board[hexKey(c.q,c.r)]))) return false;
+  if (HEX_CELLS.some(c => !TYPES.includes(MatchLogic.baseType(rec.board[hexKey(c.q,c.r)])))) return false;
   const count = n => Number.isFinite(n) && n >= 0;
   return count(rec.score) && count(rec.movesLeft) && count(rec.charge);
 }
@@ -1241,6 +1337,7 @@ function battleTick(){
 }
 function endBattle(playerWon){
   if (!session || session.ended) return;
+  queuedSwap = null;
   session.ended = true;
   clearInterval(session.clockTimer);
   clearTimeout(session.aiTimer);
@@ -1312,19 +1409,25 @@ function angleToHexDir(dx,dy){
 function bindBoardEvents(){
   let start = null;
   boardEl.onpointerdown = (e)=>{
-    if (!session || session.busy) return;
+    if (!session) return;
     const t = e.target.closest('.tile'); if (!t) return;
     if (t.setPointerCapture) { try { t.setPointerCapture(e.pointerId); } catch(err){} }
     start = { q:+t.dataset.q, r:+t.dataset.r, x:e.clientX, y:e.clientY };
   };
   boardEl.onpointerup = (e)=>{
-    if (!start || !session || session.busy) return;
+    if (!start || !session) return;
     const s = start; start = null;
     const dx = e.clientX - s.x, dy = e.clientY - s.y;
     if (Math.hypot(dx,dy) < 18) return;
     const [dq,dr] = angleToHexDir(dx,dy);
     const target = { q:s.q+dq, r:s.r+dr };
     if (!(hexKey(target.q,target.r) in session.board)) return;
+    // Busy board: remember this swipe as the one waiting one (the most recent
+    // swipe wins) and play nothing -- the board decides what to do with it.
+    if (session.busy){
+      queuedSwap = { a: { q: s.q, r: s.r }, b: { q: target.q, r: target.r } };
+      return;
+    }
     attemptSwap({q:s.q,r:s.r}, target);
   };
 }
@@ -1333,28 +1436,105 @@ async function attemptSwap(a, b){
   if (!isHexAdjacent(a,b) || session.busy) return;
   session.busy = true;
   clearHint();
+  const ka = hexKey(a.q,a.r);
+  const kb = hexKey(b.q,b.r);
+  const typeA = session.board[ka];
+  const typeB = session.board[kb];
   swapHex(session.board, a, b);
   const matched = findMatches(session.board);
-  if (matched.size === 0){
+  // A colour bomb swapped with anything is a legal move even when it makes no
+  // match: it clears with its own blast instead of matching, so the swap is
+  // never reverted. A plain tile still needs a match to go through.
+  const bombBlast = matched.size === 0 ? MatchLogic.bombSwapBlast(session.board, a, b) : null;
+  if (matched.size === 0 && !bombBlast){
     swapHex(session.board, a, b); // revert data
     Sound.swapInvalid();
     await animateSwap(a,b, true); // visual swap-and-back
     session.busy = false;
+    await flushQueuedSwap();
     return;
   }
   // valid: play swap visually then resolve
   await animateSwap(a,b,false);
-  await resolveCascade(matched, 1);
+  // What this move clears. A colour bomb swap with no match clears exactly its
+  // blast (the bomb cell plus the monster it was swapped with, specials chained);
+  // a match detonates matched specials before any score is worked out: the match
+  // grows with every cell each matched cell's blast reaches, then chainSpecials
+  // sets off whatever the blasts caught in turn. swapPartnerType is the monster of
+  // the tile that stood in the swapped cell the match picked up (the tile the
+  // matched tile was swapped with), or null when neither swapped cell matched.
+  // The extra cells a blast clears are the only scoring change, so the run data
+  // findMatches attached to the match rides along on the grown set.
+  let expanded;
+  if (matched.size === 0){
+    expanded = bombBlast;
+  } else {
+    const baseA = MatchLogic.baseType(typeA);
+    const baseB = MatchLogic.baseType(typeB);
+    const swapPartnerType = matched.has(ka) ? baseA : (matched.has(kb) ? baseB : null);
+    expanded = new Set(matched);
+    matched.forEach(cellKey=>{
+      MatchLogic.specialTargets(session.board, cellKey, swapPartnerType)
+        .forEach(t=> expanded.add(t));
+    });
+    expanded = MatchLogic.chainSpecials(session.board, expanded, swapPartnerType);
+    expanded.runLen = matched.runLen;
+    expanded.burstClass = matched.burstClass;
+  }
+  await resolveCascade(expanded, 1);
   if (session.mode === 'solo'){
     session.movesLeft -= 1;
     updateSoloHud();
     // A level still in play stays resumable; one that just ended has been cleared.
-    if (!checkSoloEnd()) saveSoloSession();
+    const ended = checkSoloEnd();
+    if (!ended) saveSoloSession();
+    session.busy = false;
+    if (ended) {
+      queuedSwap = null;
+    } else {
+      await flushQueuedSwap();
+    }
+    return;
   } else {
     updateBattleHud();
-    if (session.score >= BATTLE_TARGET) { session.busy=false; endBattle(true); return; }
+    if (session.score >= BATTLE_TARGET) {
+      queuedSwap = null;
+      session.busy = false;
+      endBattle(true);
+      return;
+    }
+    session.busy = false;
+    await flushQueuedSwap();
+    return;
   }
-  session.busy = false;
+}
+
+// A remembered swipe is only played if it still matches the board as it is
+// *now*: while the swipe waited, the board may have changed under it (a
+// cascade fell, a level restarted). The verdict is reached on a copy of the
+// board, so this check can never touch the real one.
+function swipeStillMatches(swipe){
+  if (!session || !swipe || !swipe.a || !swipe.b) return false;
+  const { a, b } = swipe;
+  // Either cell no longer on the board, or the pair not adjacent: nothing to play.
+  if (!(hexKey(a.q,a.r) in session.board)) return false;
+  if (!(hexKey(b.q,b.r) in session.board)) return false;
+  if (!isHexAdjacent(a,b)) return false;
+  const probe = { ...session.board };
+  swapHex(probe, a, b);
+  // A colour bomb swapped with anything is legal with or without a match.
+  if (MatchLogic.bombSwapBlast(probe, a, b)) return true;
+  return findMatches(probe).size > 0;
+}
+
+async function flushQueuedSwap(){
+  const swipe = queuedSwap;
+  queuedSwap = null;
+  if (!swipe) return;
+  // Stale swipe: dropped quietly -- no swap-and-back wiggle, no invalid-swap
+  // sound, no move or score change.
+  if (!swipeStillMatches(swipe)) return;
+  await attemptSwap(swipe.a, swipe.b);
 }
 
 async function animateSwap(a,b, revert){
@@ -1378,6 +1558,8 @@ async function animateSwap(a,b, revert){
 }
 
 async function resolveCascade(firstMatch, comboStart){
+  cascadeBeats = [];
+  lastCascadeRecord = [];
   let matched = firstMatch;
   let combo = comboStart;
   while (matched.size > 0){
@@ -1385,6 +1567,14 @@ async function resolveCascade(firstMatch, comboStart){
     const av = selectedAvatar();
     let maxRun = 3;
     matched.forEach(key=>{ maxRun = Math.max(maxRun, (matched.runLen && matched.runLen[key]) || 3); });
+    // The beat this clearing step plays, straight from the logic's table: the
+    // tiles swell, then pop, and only then may the board start falling.
+    const beat = window.MatchLogic.matchBeat(maxRun);
+    cascadeBeats.push({ run: maxRun, ...beat });
+    // How big this step's burst is, straight from findMatches() when the step
+    // came from a match; a power-cleared set carries no class of its own, so it
+    // is read from the same longest run the score below already used.
+    const burstClass = matched.burstClass || (maxRun >= 5 ? 'huge' : (maxRun >= 4 ? 'big' : 'normal'));
     const sizeBonus = maxRun>=5 ? 2 : (maxRun>=4 ? 1.5 : 1);
     let gained;
     if (window.MatchLogic && typeof window.MatchLogic.scoreMatch === 'function') {
@@ -1401,21 +1591,41 @@ async function resolveCascade(firstMatch, comboStart){
     spawnScorePopup(matched, gained, combo);
     Sound.match(combo);
     vibrate(combo > 1 ? [10,30,10] : 10);
-    if (sizeBonus >= 2){ showToast('5-Match! ⭐ Double points!'); spawnComboBurst('5-MATCH! ⭐'); }
-    else if (sizeBonus >= 1.5){ showToast('4-Match! +50% bonus!'); spawnComboBurst('4-MATCH!'); }
-    else if (combo === 2) showToast('Combo x2!');
-    else if (combo >= 3){ showToast(`Combo x${combo}! 🔥`); spawnComboBurst(`COMBO x${combo}!`); }
-    // clear animation: collect the tiles being cleared, then pop them
+    // What this clearing step did, in one short callout over the board; the same
+    // element is re-used and re-animated if another step lands while it shows.
+    const calloutText = sizeBonus >= 2 ? '5-MATCH!'
+      : sizeBonus >= 1.5 ? '4-MATCH'
+      : combo >= 3 ? `COMBO x${combo}!`
+      : combo === 2 ? 'COMBO x2'
+      : `${Math.max(maxRun, 3)}-MATCH`;
+    showMatchCallout(calloutText);
+    // clear animation: collect the tiles being cleared, then pop them. The beat's
+    // swell (the bigger moment of a 4+ match) is held first; a player who asked
+    // for reduced motion or turned effects off skips it and the burst entirely
+    // (no animation to wait for), so those steps only ever wait one frame.
     const clearedEls = [];
     matched.forEach(key=>{
       const el = session.elMap[key];
-      if (el) clearedEls.push(el);
+      if (el){
+        delete el.dataset.special; // a cleared special keeps no stale mark
+        clearedEls.push(el);
+      }
     });
-    playClearPop(clearedEls);
-    await sleep(180);
+    const motionWanted = matchPopWanted();
+    if (motionWanted && beat.swell > 0) await sleep(beat.swell);
+    const popStartedAt = performance.now();
+    playClearPop(clearedEls, burstClass);
+    // The fall only ever starts once the burst has actually finished: the later
+    // of the popped tiles' own animationend -- a big or huge burst swells and
+    // bursts inside its own, longer animation -- and beat.pop, backed up by a
+    // stall backstop past the longest pop so the cascade can never hang on a
+    // tile that stopped reporting.
+    await waitBurstEnd(clearedEls, beat.pop, motionWanted);
+    const popEndedAt = performance.now();
     // compute collapse plan and animate fall
     const plan = computeCollapse(session.board, matched);
-    await animateCollapse(plan, clearedEls);
+    const fall = await animateCollapse(plan, clearedEls, beat.fall, motionWanted);
+    lastCascadeRecord.push({ run: maxRun, popStartedAt, popEndedAt, ...fall });
     matched = findMatches(session.board);
     combo += 1;
     if (session.mode==='solo') updateSoloHud(); else updateBattleHud();
@@ -1447,15 +1657,86 @@ async function reshuffleIfStuck(){
   return true;
 }
 
-async function animateCollapse(plan, clearedEls = []){
+// Wait for the burst a clearing step just played: the later of the popped tiles'
+// own animationend and the beat's pop, with a backstop past the longest pop CSS
+// can play -- the huge burst, matchBeat(5).swell + pop = 560ms -- so a tile that
+// never reports cannot stall the cascade and a 4- or 5-match burst is never cut
+// short before it has shrunk off the board. When no pop was wanted there is
+// nothing to wait for -- no animation was played -- so the wait is a single
+// animation frame, the shortest the beat allows.
+const MAX_POP_MS = 560;
+function waitBurstEnd(els, popMs, wanted){
+  if (!wanted){
+    return new Promise(res=> requestAnimationFrame(res));
+  }
+  return new Promise(resolve => {
+    const remaining = new Set(els);
+    let timed = false;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(popTimer);
+      clearTimeout(backstop);
+      els.forEach(el=> el.removeEventListener('animationend', onEnd));
+      resolve();
+    };
+    const check = () => { if (timed && remaining.size === 0) finish(); };
+    const onEnd = (e) => {
+      if (e.target !== e.currentTarget) return; // a child's pop, not the tile's
+      if (remaining.delete(e.currentTarget)) check();
+    };
+    els.forEach(el=> el.addEventListener('animationend', onEnd));
+    const popTimer = setTimeout(()=>{ timed = true; check(); }, popMs);
+    const backstop = setTimeout(finish, Math.max(popMs, MAX_POP_MS) + 60);
+  });
+}
+
+// Wait for the fall the collapse just started: the falling tiles' own
+// transitionend, or the beat's fall when the motion runs, whichever is later --
+// with a backstop at fall + 60 ms. A player who asked for reduced motion (or
+// switched effects off) has transitions that end as soon as they begin, so the
+// wait is then just the transitions themselves, the shortest the fall allows.
+function waitFallEnd(fallingEls, fallMs, wanted){
+  if (fallingEls.length === 0){
+    return wanted ? sleep(fallMs) : sleep(0);
+  }
+  return new Promise(resolve => {
+    const remaining = new Set(fallingEls);
+    // With motion wanted, the beat's fall is the minimum dwell; without it, the
+    // transitions alone decide and the wait is as short as they are.
+    let timed = !wanted;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(fallTimer);
+      clearTimeout(backstop);
+      fallingEls.forEach(el=> el.removeEventListener('transitionend', onEnd));
+      resolve();
+    };
+    const check = () => { if (timed && remaining.size === 0) finish(); };
+    const onEnd = (e) => {
+      if (e.target !== e.currentTarget) return;
+      if (remaining.delete(e.currentTarget)) check();
+    };
+    fallingEls.forEach(el=> el.addEventListener('transitionend', onEnd));
+    const fallTimer = wanted ? setTimeout(()=>{ timed = true; check(); }, fallMs) : null;
+    const backstop = setTimeout(finish, fallMs + 60);
+  });
+}
+
+async function animateCollapse(plan, clearedEls = [], fallMs = 170, motionWanted = true){
   const newMap = {};
   const incoming = [];
+  const fallingEls = [];
   for (const item of plan){
     if (item.fromR !== null){
       const el = session.elMap[hexKey(item.q, item.fromR)];
       if (el){
         newMap[hexKey(item.q, item.toR)] = el;
         el.dataset.q = item.q; el.dataset.r = item.toR;
+        if (item.toR !== item.fromR) fallingEls.push(el);
       }
     } else {
       const keyId = 'k'+(tileKeySeq++);
@@ -1465,6 +1746,7 @@ async function animateCollapse(plan, clearedEls = []){
       boardEl.appendChild(el);
       newMap[hexKey(item.q, item.toR)] = el;
       incoming.push(el);
+      fallingEls.push(el);
     }
   }
   // the cleared tiles are gone: drop every one of them that the new board does
@@ -1479,7 +1761,12 @@ async function animateCollapse(plan, clearedEls = []){
     positionHexTile(session.elMap[key], q, r);
   });
   incoming.forEach(el=>{ el.style.opacity=''; el.classList.remove('spawning'); });
-  await sleep(170);
+  // the tiles are back in their places and the fall is under way: that is the
+  // moment the collapse began.
+  const fallStartedAt = performance.now();
+  await waitFallEnd(fallingEls, fallMs, motionWanted);
+  const fallEndedAt = performance.now();
+  return { fallStartedAt, fallEndedAt };
 }
 
 // Ends the level once the target is met or the moves run out, clearing the saved
@@ -1572,6 +1859,7 @@ document.getElementById('power-btn').addEventListener('click', async ()=>{
         const type = session.board[key];
         el[key].innerHTML = MonsterTiles.monsterTileSVG(type);
         el[key].dataset.type = type;
+        delete el[key].dataset.special; // the reshaped tile carries no special
       });
       if (session.mode==='solo'){ session.movesLeft += 2; updateSoloHud(); }
       break;
@@ -1940,7 +2228,10 @@ updateEffectsToggle();
    where the tile has already left the DOM by then and no animation can report
    back, so the class can never stick to a tile that lives on. */
 const MATCH_POP_CLASS = 'matchPop';
-const MATCH_POP_BACKSTOP_MS = 320; // well past the 180ms pop: a safety net only
+// Well past the longest pop CSS can play -- the huge burst, 560ms from
+// matchBeat(5).swell + pop -- so a big or huge pop is never cut short; it is a
+// safety net only, the animationend above it is what normally ends the pop.
+const MATCH_POP_BACKSTOP_MS = 640;
 const matchPopTimers = new WeakMap();
 
 // Reduced motion wins. Otherwise the shared effects switch, when it is there.
@@ -1954,7 +2245,10 @@ function matchPopWanted(){
 }
 
 // Pop each of these tiles, and take the class off again as soon as its pop ends.
-function playClearPop(els){
+// Every tile is told how big its match was (data-burst: normal, big or huge) a
+// moment before the class lands, so the pop it plays can be read off the element;
+// the attribute is taken off with the class, so it never outlives the pop either.
+function playClearPop(els, burstClass){
   if (!matchPopWanted()) return;
   for (const el of els){
     if (!el || !el.classList) continue;
@@ -1967,8 +2261,10 @@ function playClearPop(els){
       matchPopTimers.delete(el);
       el.removeEventListener('animationend', done);
       el.classList.remove(MATCH_POP_CLASS);
+      if (el.dataset) delete el.dataset.burst;
     };
     el.addEventListener('animationend', done);
+    if (el.dataset) el.dataset.burst = burstClass;
     el.classList.add(MATCH_POP_CLASS);
     timer = setTimeout(done, MATCH_POP_BACKSTOP_MS); // only if the pop never reported
     matchPopTimers.set(el, timer);
