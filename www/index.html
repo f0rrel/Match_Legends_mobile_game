@@ -1442,7 +1442,11 @@ async function attemptSwap(a, b){
   const typeB = session.board[kb];
   swapHex(session.board, a, b);
   const matched = findMatches(session.board);
-  if (matched.size === 0){
+  // A colour bomb swapped with anything is a legal move even when it makes no
+  // match: it clears with its own blast instead of matching, so the swap is
+  // never reverted. A plain tile still needs a match to go through.
+  const bombBlast = matched.size === 0 ? MatchLogic.bombSwapBlast(session.board, a, b) : null;
+  if (matched.size === 0 && !bombBlast){
     swapHex(session.board, a, b); // revert data
     Sound.swapInvalid();
     await animateSwap(a,b, true); // visual swap-and-back
@@ -1452,24 +1456,31 @@ async function attemptSwap(a, b){
   }
   // valid: play swap visually then resolve
   await animateSwap(a,b,false);
-  // A matched special detonates before any score is worked out: the match grows
-  // with every cell each matched cell's blast reaches, then chainSpecials sets
-  // off whatever the blasts caught in turn. swapPartnerType is the monster of
+  // What this move clears. A colour bomb swap with no match clears exactly its
+  // blast (the bomb cell plus the monster it was swapped with, specials chained);
+  // a match detonates matched specials before any score is worked out: the match
+  // grows with every cell each matched cell's blast reaches, then chainSpecials
+  // sets off whatever the blasts caught in turn. swapPartnerType is the monster of
   // the tile that stood in the swapped cell the match picked up (the tile the
   // matched tile was swapped with), or null when neither swapped cell matched.
   // The extra cells a blast clears are the only scoring change, so the run data
   // findMatches attached to the match rides along on the grown set.
-  const baseA = MatchLogic.baseType(typeA);
-  const baseB = MatchLogic.baseType(typeB);
-  const swapPartnerType = matched.has(ka) ? baseA : (matched.has(kb) ? baseB : null);
-  let expanded = new Set(matched);
-  matched.forEach(cellKey=>{
-    MatchLogic.specialTargets(session.board, cellKey, swapPartnerType)
-      .forEach(t=> expanded.add(t));
-  });
-  expanded = MatchLogic.chainSpecials(session.board, expanded, swapPartnerType);
-  expanded.runLen = matched.runLen;
-  expanded.burstClass = matched.burstClass;
+  let expanded;
+  if (matched.size === 0){
+    expanded = bombBlast;
+  } else {
+    const baseA = MatchLogic.baseType(typeA);
+    const baseB = MatchLogic.baseType(typeB);
+    const swapPartnerType = matched.has(ka) ? baseA : (matched.has(kb) ? baseB : null);
+    expanded = new Set(matched);
+    matched.forEach(cellKey=>{
+      MatchLogic.specialTargets(session.board, cellKey, swapPartnerType)
+        .forEach(t=> expanded.add(t));
+    });
+    expanded = MatchLogic.chainSpecials(session.board, expanded, swapPartnerType);
+    expanded.runLen = matched.runLen;
+    expanded.burstClass = matched.burstClass;
+  }
   await resolveCascade(expanded, 1);
   if (session.mode === 'solo'){
     session.movesLeft -= 1;
@@ -1511,6 +1522,8 @@ function swipeStillMatches(swipe){
   if (!isHexAdjacent(a,b)) return false;
   const probe = { ...session.board };
   swapHex(probe, a, b);
+  // A colour bomb swapped with anything is legal with or without a match.
+  if (MatchLogic.bombSwapBlast(probe, a, b)) return true;
   return findMatches(probe).size > 0;
 }
 
