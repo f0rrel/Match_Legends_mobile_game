@@ -17,7 +17,7 @@ Bright · flashy · juicy · cute · competitive. Every action gets visible, sat
 
 ## Look
 - Tiles are simple glossy jewels drawn in SVG: sword=red circle, shield=blue rounded square, urn=purple triangle, crown=yellow star, flame=orange diamond, gem=green hexagon. Each is filled with its own colour, wrapped in a darker outline and lit with a white gloss and shine, and each has its own silhouette, so tiles are distinguishable even without colour. Readable on a small phone.
-- Special tiles never look like normal tiles: a line blaster shows its direction, a bomb glows and pulses. The monster stays visible underneath.
+- Special tiles never look like normal tiles: a line blaster wears bright white stripes in the row or column it clears, a bomb is wrapped in a slowly pulsing glowing ring with a spark on top. The jewel stays visible underneath.
 - Avatars are monster characters in a Hotel-Transylvania-like style: ridiculous and lovable (a fly, a blob, a tiny vampire…). Portraits are AI-generated in one fixed style; the owner picks from candidates.
 - Effects are readable, not rushed: a normal 3-match takes about 0.4–0.6 s from pop to falling tiles. Bigger matches get a bigger moment: tiles swell for a split second, then burst; up to about 1 s for 5+ matches and combos. A power gets its own moment of up to about 1.2 s: the screen dims, the avatar appears, the board shakes. Taps are never lost (queued during effects). Reduced motion and the effects toggle make everything short again.
 

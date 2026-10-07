@@ -318,26 +318,6 @@ test('a special caught in a blast goes off too, all the way down the chain', () 
   assert.ok(out.has(key(2, 4)) && out.has(key(4, 6)), 'the bomb 3x3 came with it');
 });
 
-test('two line blasters swapped together clear both of their lines', () => {
-  const board = stuckBoard();
-  board[key(0, 0)] = 'sword+line-h';
-  board[key(1, 0)] = 'gem+line-v';
-  const blast = ML.combineSwapBlast(board, { col: 0, row: 0 }, { col: 1, row: 0 });
-  assert.ok(blast, 'swapping two line blasters is a legal combine');
-  [...ML.ROW_LINES[0]].forEach(c => assert.ok(blast.has(key(c.col, c.row))));
-  [...ML.COL_LINES[1]].forEach(c => assert.ok(blast.has(key(c.col, c.row))));
-});
-
-test('a colour bomb in a combine takes every tile of both monsters', () => {
-  const board = stuckBoard();
-  board[key(0, 0)] = 'sword+bomb';
-  board[key(1, 0)] = 'gem+line-h';
-  const blast = ML.combineSwapBlast(board, { col: 0, row: 0 }, { col: 1, row: 0 });
-  const ofType = t => Object.keys(board).filter(k => ML.baseType(board[k]) === t);
-  ofType('sword').forEach(k => assert.ok(blast.has(k)));
-  ofType('gem').forEach(k => assert.ok(blast.has(k)));
-});
-
 test('a special swapped with a plain tile is not a combine', () => {
   const board = stuckBoard();
   board[key(0, 0)] = 'sword+line-h';

@@ -35,5 +35,12 @@
     return SCALES[Math.min(s, 5)];
   }
 
-  return { WORDS, cascadeCallout, calloutScale };
+  // What a special + special combo shouts, keyed by the logic's combo kind
+  // ('cross', 'mega', 'kaboom'). An unknown kind says nothing.
+  const COMBO_WORDS = { cross: 'CROSS BLAST!', mega: 'MEGA LINES!', kaboom: 'KABOOM!' };
+  function comboCallout(kind){
+    return Object.prototype.hasOwnProperty.call(COMBO_WORDS, kind) ? COMBO_WORDS[kind] : null;
+  }
+
+  return { WORDS, COMBO_WORDS, cascadeCallout, calloutScale, comboCallout };
 });

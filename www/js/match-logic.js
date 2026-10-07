@@ -754,36 +754,84 @@
   // is never written to. A pair only combines when BOTH cells hold a special
   // kind; a special swapped with a plain tile is not a combine (null) and stays
   // a plain swap that must match to be legal.
-  //
-  // Two line blasters clear both of their own lines (row or column, whichever
-  // each one carries); a pair containing a colour bomb clears every tile of
-  // both swapped tiles' monsters. Either way the whole set is run through
-  // chainSpecials so any special it catches fires in turn.
+
+  // The full row plus the full column through a cell (a cross).
+  function crossBlast(board, key){
+    const blast = new Set();
+    rowBlast(board, key).forEach(k => blast.add(k));
+    colBlast(board, key).forEach(k => blast.add(k));
+    return blast;
+  }
+
+  // Full rows and full columns through every row/column within `radius` of the
+  // cell: radius 1 is the three rows and three columns centred on it (a band).
+  function bandBlast(board, key, radius){
+    const blast = new Set();
+    const cell = parseCellKey(key);
+    if (!cell) return blast;
+    for (let d = -radius; d <= radius; d++){
+      const row = cell.row + d, col = cell.col + d;
+      if (row >= 0 && row < ROWS) rowBlast(board, cellKey(cell.col, row)).forEach(k => blast.add(k));
+      if (col >= 0 && col < COLS) colBlast(board, cellKey(col, cell.row)).forEach(k => blast.add(k));
+    }
+    return blast;
+  }
+
+  // Every cell inside a square of `radius` around the cell (radius 2 is 5x5),
+  // clipped to the board.
+  function areaBlast(board, key, radius){
+    const blast = new Set();
+    const cell = parseCellKey(key);
+    if (!cell) return blast;
+    for (let dc = -radius; dc <= radius; dc++){
+      for (let dr = -radius; dr <= radius; dr++){
+        const col = cell.col + dc, row = cell.row + dr;
+        if (!inBounds(col, row)) continue;
+        const k = cellKey(col, row);
+        if (!board || k in board) blast.add(k);
+      }
+    }
+    return blast;
+  }
+
+  // Which combine a pair of specials makes, read from the two tiles alone:
+  // 'cross' (line + line), 'mega' (line + bomb) or 'kaboom' (bomb + bomb), or
+  // null when either tile is plain (so it is not a combine at all). Both orders
+  // of the pair give the same answer.
+  function comboKind(tileA, tileB){
+    const kindA = specialOf(tileA), kindB = specialOf(tileB);
+    if (kindA === null || kindB === null) return null;
+    const lineA = kindA.indexOf('line') === 0, lineB = kindB.indexOf('line') === 0;
+    const bombA = kindA === 'bomb', bombB = kindB === 'bomb';
+    if (lineA && lineB) return 'cross';
+    if ((lineA && bombB) || (bombA && lineB)) return 'mega';
+    if (bombA && bombB) return 'kaboom';
+    return null; // only reachable for kinds added later, and then it is not a combo
+  }
+
+  // What swapping two specials together clears, centred on the first swapped
+  // cell `a` (the cell the swipe came from):
+  //   line + line -> the full row AND full column of a (cross);
+  //   line + bomb -> the 3 rows and 3 columns centred on a;
+  //   bomb + bomb -> the 5x5 square around a.
+  // The two swapped specials have already paid for themselves, so they are not
+  // fired again by the chain; anything else the blast catches still fires.
   function combineSwapBlast(board, a, b){
     if (!board || !a || !b) return null;
     const ka = cellKey(a.col, a.row), kb = cellKey(b.col, b.row);
     if (!(ka in board) || !(kb in board)) return null;
-    const atA = board[ka], atB = board[kb];
-    const kindA = specialOf(atA), kindB = specialOf(atB);
-    if (kindA === null || kindB === null) return null; // a plain tile is not a combine
-
-    if (kindA === 'bomb' || kindB === 'bomb'){
-      // Every tile of both monsters, bomb's own and partner's alike. A bomb in
-      // the pair has already paid for itself; it must not fire again as 3x3.
-      const blast = new Set();
-      cellsOfType(board, baseType(atA)).forEach(key => blast.add(key));
-      cellsOfType(board, baseType(atB)).forEach(key => blast.add(key));
-      const alreadyFired = new Set();
-      if (kindA === 'bomb') alreadyFired.add(ka);
-      if (kindB === 'bomb') alreadyFired.add(kb);
-      return chainSpecials(board, blast, undefined, alreadyFired);
-    }
-
-    // Two line blasters: both of their lines.
-    const blast = lineBlast(board, ka);
-    lineBlast(board, kb).forEach(key => blast.add(key));
-    return chainSpecials(board, blast);
+    const kind = comboKind(board[ka], board[kb]);
+    if (!kind) return null;
+    let blast;
+    if (kind === 'cross') blast = crossBlast(board, ka);
+    else if (kind === 'mega') blast = bandBlast(board, ka, 1);
+    else blast = areaBlast(board, ka, 2);
+    return chainSpecials(board, blast, undefined, new Set([ka, kb]));
   }
+  api.crossBlast = crossBlast;
+  api.bandBlast = bandBlast;
+  api.areaBlast = areaBlast;
+  api.comboKind = comboKind;
   api.combineSwapBlast = combineSwapBlast;
   /* === END TASK SECTION ml-45 === */
 
