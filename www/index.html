@@ -1337,6 +1337,7 @@ function battleTick(){
 }
 function endBattle(playerWon){
   if (!session || session.ended) return;
+  queuedSwap = null;
   session.ended = true;
   clearInterval(session.clockTimer);
   clearTimeout(session.aiTimer);
@@ -1442,6 +1443,7 @@ async function attemptSwap(a, b){
     Sound.swapInvalid();
     await animateSwap(a,b, true); // visual swap-and-back
     session.busy = false;
+    await flushQueuedSwap();
     return;
   }
   // valid: play swap visually then resolve
@@ -1451,12 +1453,35 @@ async function attemptSwap(a, b){
     session.movesLeft -= 1;
     updateSoloHud();
     // A level still in play stays resumable; one that just ended has been cleared.
-    if (!checkSoloEnd()) saveSoloSession();
+    const ended = checkSoloEnd();
+    if (!ended) saveSoloSession();
+    session.busy = false;
+    if (ended) {
+      queuedSwap = null;
+    } else {
+      await flushQueuedSwap();
+    }
+    return;
   } else {
     updateBattleHud();
-    if (session.score >= BATTLE_TARGET) { session.busy=false; endBattle(true); return; }
+    if (session.score >= BATTLE_TARGET) {
+      queuedSwap = null;
+      session.busy = false;
+      endBattle(true);
+      return;
+    }
+    session.busy = false;
+    await flushQueuedSwap();
+    return;
   }
-  session.busy = false;
+}
+
+async function flushQueuedSwap(){
+  const swipe = queuedSwap;
+  queuedSwap = null;
+  if (swipe) {
+    await attemptSwap(swipe.a, swipe.b);
+  }
 }
 
 async function animateSwap(a,b, revert){
