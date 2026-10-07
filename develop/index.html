@@ -404,15 +404,31 @@
   }
   .board-wrap.shake{ animation:boardShake .32s ease; }
 
-  .combo-burst{
-    position:absolute; left:50%; top:50%; translate:-50% -50%; scale:0.3;
-    font-family:'Cinzel',serif; font-weight:900; font-size:26px; color:var(--gold-bright);
-    text-shadow:0 0 20px rgba(247,215,122,0.8), 0 4px 10px rgba(0,0,0,0.6);
+  /* ==== ML-JUICE: match callout ====
+     One short line over the middle of the board saying what the match just did
+     ('3-MATCH', '4-MATCH', '5-MATCH!', 'COMBO x2', 'COMBO x3!'). Exactly one
+     element ever exists: the cascade re-uses it while it is still showing,
+     restarting the animation, and the script drops it just after the run ends.
+     The animation lives on the bare class (a fresh element animates on its own),
+     is 700 ms total — in, hold, gone — and only moves opacity and scale, so the
+     centring `translate` underneath is never touched. */
+  .match-callout{
+    position:absolute; left:50%; top:50%; translate:-50% -50%;
+    font-family:'Cinzel',serif; font-weight:900;
+    font-size:clamp(18px, 6.4vw, 30px); line-height:1.1;
+    color:var(--gold-bright); padding:6px 16px; border-radius:999px;
+    background:rgba(21,14,39,0.78); border:1px solid rgba(247,215,122,0.55);
+    text-shadow:0 0 16px rgba(247,215,122,0.75), 0 2px 6px rgba(0,0,0,0.8);
     opacity:0; pointer-events:none; z-index:10; text-align:center; white-space:nowrap;
-    transition:scale .3s cubic-bezier(.34,2.2,.64,1), opacity .3s ease;
+    animation:matchCallout .7s ease-out forwards;
   }
-  .combo-burst.pop{ scale:1; opacity:1; }
-  .combo-burst.fade{ scale:1.15; opacity:0; }
+  @keyframes matchCallout{
+    0%{ opacity:0; scale:.45; }
+    20%{ opacity:1; scale:1.12; animation-timing-function:ease-out; }
+    34%{ scale:1; }
+    70%{ opacity:1; scale:1; animation-timing-function:ease-in; }
+    100%{ opacity:0; scale:1.2; }
+  }
 
   .power-row{display:flex; align-items:center; gap:14px; margin-top:auto;}
   .power-ring-btn{
@@ -1028,9 +1044,14 @@ function idleWobbleDelay(q, r){
 function tileEl(type, q, r, key){
   const d = document.createElement('div');
   d.className = 'tile';
-  d.innerHTML = MonsterTiles.monsterTileSVG(type);
+  // The board stores a special as 'monster+kind'; the artwork and the colour
+  // rules key off the monster half only, the kind is marked separately.
+  const base = MatchLogic.baseType(type);
+  d.innerHTML = MonsterTiles.monsterTileSVG(base);
   // data-type is what the tile colour rules in the CSS key off.
-  d.dataset.q = q; d.dataset.r = r; d.dataset.key = key; d.dataset.type = type;
+  d.dataset.q = q; d.dataset.r = r; d.dataset.key = key; d.dataset.type = base;
+  const special = MatchLogic.specialOf(type);
+  if (special) d.dataset.special = special;
   // Only the idle wobble reads this; it changes nothing else about the tile.
   d.style.setProperty('--wobble-delay', idleWobbleDelay(q, r));
   positionHexTile(d, q, r);
@@ -1050,14 +1071,27 @@ function showToast(msg){
   clearTimeout(showToast._t);
   showToast._t = setTimeout(()=>t.classList.remove('show'), 1600);
 }
-function spawnComboBurst(text){
-  const el = document.createElement('div');
-  el.className = 'combo-burst';
-  el.textContent = text;
-  boardEl.appendChild(el);
-  requestAnimationFrame(()=> el.classList.add('pop'));
-  setTimeout(()=> el.classList.add('fade'), 380);
-  setTimeout(()=> el.remove(), 680);
+/* The single callout over the board. It is created on demand, re-used (and its
+   animation restarted) while it is still on screen, and removed just after the
+   animation has run out, so a cascade never puts a second one on screen. */
+function showMatchCallout(text){
+  let el = boardEl.querySelector('.match-callout');
+  if (!el){
+    el = document.createElement('div');
+    el.className = 'match-callout';
+    el.textContent = text;
+    boardEl.appendChild(el);
+  } else {
+    el.textContent = text;
+    // restart the run: pull the animation off, force a reflow, put it back
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = '';
+  }
+  const drop = ()=>{ if (el.isConnected) el.remove(); };
+  el.onanimationend = drop;
+  clearTimeout(showMatchCallout._t);
+  showMatchCallout._t = setTimeout(drop, 820);
 }
 function screenShake(){
   boardWrapEl.classList.remove('shake');
@@ -1119,6 +1153,15 @@ window.__ML_TEST__ = {
   appState: () => appState,
   lastBeats: () => cascadeBeats.map(b => ({ ...b })),
   lastCascade: () => lastCascadeRecord.map(e => ({ ...e })),
+  // Put a board (specials included) straight into the level in play and repaint
+  // it, so a test can set up a position no deal would ever hand out.
+  setBoard: (board) => {
+    if (!session || !board || typeof board !== 'object') return null;
+    session.board = { ...board };
+    session.elMap = freshRenderBoard(session.board);
+    bindBoardEvents();
+    return Object.keys(session.board).length;
+  },
 };
 let tileKeySeq = 1;
 
@@ -1163,7 +1206,7 @@ function isResumableSession(rec){
   if (!rec || typeof rec !== 'object') return false;
   if (!LEVELS.some(l => l.id === rec.levelId)) return false;
   if (!rec.board || typeof rec.board !== 'object') return false;
-  if (HEX_CELLS.some(c => !TYPES.includes(rec.board[hexKey(c.q,c.r)]))) return false;
+  if (HEX_CELLS.some(c => !TYPES.includes(MatchLogic.baseType(rec.board[hexKey(c.q,c.r)])))) return false;
   const count = n => Number.isFinite(n) && n >= 0;
   return count(rec.score) && count(rec.movesLeft) && count(rec.charge);
 }
@@ -1459,10 +1502,14 @@ async function resolveCascade(firstMatch, comboStart){
     spawnScorePopup(matched, gained, combo);
     Sound.match(combo);
     vibrate(combo > 1 ? [10,30,10] : 10);
-    if (sizeBonus >= 2){ showToast('5-Match! ⭐ Double points!'); spawnComboBurst('5-MATCH! ⭐'); }
-    else if (sizeBonus >= 1.5){ showToast('4-Match! +50% bonus!'); spawnComboBurst('4-MATCH!'); }
-    else if (combo === 2) showToast('Combo x2!');
-    else if (combo >= 3){ showToast(`Combo x${combo}! 🔥`); spawnComboBurst(`COMBO x${combo}!`); }
+    // What this clearing step did, in one short callout over the board; the same
+    // element is re-used and re-animated if another step lands while it shows.
+    const calloutText = sizeBonus >= 2 ? '5-MATCH!'
+      : sizeBonus >= 1.5 ? '4-MATCH'
+      : combo >= 3 ? `COMBO x${combo}!`
+      : combo === 2 ? 'COMBO x2'
+      : `${Math.max(maxRun, 3)}-MATCH`;
+    showMatchCallout(calloutText);
     // clear animation: collect the tiles being cleared, then pop them. The beat's
     // swell (the bigger moment of a 4+ match) is held first; a player who asked
     // for reduced motion or turned effects off skips it and the burst entirely
@@ -1720,6 +1767,7 @@ document.getElementById('power-btn').addEventListener('click', async ()=>{
         const type = session.board[key];
         el[key].innerHTML = MonsterTiles.monsterTileSVG(type);
         el[key].dataset.type = type;
+        delete el[key].dataset.special; // the reshaped tile carries no special
       });
       if (session.mode==='solo'){ session.movesLeft += 2; updateSoloHud(); }
       break;

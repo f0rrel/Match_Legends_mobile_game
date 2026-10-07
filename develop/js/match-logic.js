@@ -98,7 +98,7 @@
       for (let i=1;i<=line.length;i++){
         const startKey = hexKey(line[start].q, line[start].r);
         const curKey = i<line.length ? hexKey(line[i].q, line[i].r) : null;
-        if (curKey && board[curKey]===board[startKey]) continue;
+        if (curKey && baseType(board[curKey])===baseType(board[startKey])) continue;
         const len = i-start;
         if (len>=3) for (let k=start;k<i;k++){
           const kk = hexKey(line[k].q, line[k].r);
@@ -380,6 +380,315 @@
   api.MATCH_BEATS = MATCH_BEATS;
   api.matchBeat = matchBeat;
   /* === END TASK SECTION ml-22 === */
+
+  /* === TASK SECTION ml-33 special-tiles (add task code and api.* exports here) === */
+  // A special tile is stored as `monster + '+' + kind` ('sword+line'): the
+  // monster half decides what it matches with, the kind half decides what it
+  // does when it fires. Plain tiles carry only the monster, so encoding and
+  // matching share one separator without ambiguity.
+  function makeSpecial(type, kind){ return type + '+' + kind; }
+  function baseType(tile){
+    const i = typeof tile === 'string' ? tile.indexOf('+') : -1;
+    return i === -1 ? tile : tile.slice(0, i);
+  }
+  function specialOf(tile){
+    if (typeof tile !== 'string') return null;
+    const i = tile.indexOf('+');
+    return i === -1 ? null : tile.slice(i + 1);
+  }
+  api.makeSpecial = makeSpecial;
+  api.baseType = baseType;
+  api.specialOf = specialOf;
+  /* === END TASK SECTION ml-33 === */
+
+  /* === TASK SECTION ml-34 match-shape (add task code and api.* exports here) === */
+  // Which special a match leaves behind, read from the matched set alone. A
+  // cell's axial coordinates say everything needed: with q, r and s=-q-r you
+  // know which of the three straight-line axes the cell sits on, so the longest
+  // unbroken run of matched cells along any axis needs no board. A run of 5 or
+  // more leaves a bomb, a run of exactly 4 leaves a line, and a plain 3-match
+  // leaves nothing (an L or T of two 3-runs is not a straight run either).
+  // Along a q line r walks by 1, along an r line q walks by 1, and along an s
+  // line q walks by 1 too (r steps with it) — one fixed coordinate plus one
+  // stepping coordinate covers each axis.
+  const MATCH_SHAPE_AXES = Object.freeze([
+    Object.freeze({ fixed: c => c.q, step: c => c.r }),
+    Object.freeze({ fixed: c => c.r, step: c => c.q }),
+    Object.freeze({ fixed: c => c.s, step: c => c.q }),
+  ]);
+  // Match keys are hexKey output ('q,r'); anything else cannot place a cell, so
+  // it is skipped rather than guessed at. Malformed sets end up with no cells.
+  function matchShapeCells(matched){
+    const cells = [];
+    for (const key of matched){
+      if (typeof key !== 'string') continue;
+      const parts = key.split(',');
+      if (parts.length !== 2) continue;
+      if (!/^[+-]?\d+$/.test(parts[0]) || !/^[+-]?\d+$/.test(parts[1])) continue;
+      const q = +parts[0], r = +parts[1];
+      cells.push({ q, r, s: -q - r });
+    }
+    return cells;
+  }
+  // Longest run of consecutive cells on any one axis line. Cells of one line
+  // are grouped by their fixed coordinate and sorted by the stepping one; a
+  // gap in the stepping coordinate breaks the run, so two 3-runs separated by
+  // an unmatched cell never add up to a 6.
+  function longestStraightRun(cells){
+    let best = 0;
+    for (const axis of MATCH_SHAPE_AXES){
+      const lines = new Map();
+      for (const c of cells){
+        const id = axis.fixed(c);
+        if (!lines.has(id)) lines.set(id, []);
+        lines.get(id).push(c);
+      }
+      for (const line of lines.values()){
+        line.sort((a, b) => axis.step(a) - axis.step(b));
+        let run = 0, prev = null;
+        for (const c of line){
+          const at = axis.step(c);
+          run = (prev !== null && at === prev + 1) ? run + 1 : 1;
+          if (run > best) best = run;
+          prev = at;
+        }
+      }
+    }
+    return best;
+  }
+  function matchShape(matched){
+    if (!matched || typeof matched[Symbol.iterator] !== 'function') return null;
+    const cells = matchShapeCells(matched);
+    if (cells.length === 0) return null; // empty or unusable match leaves nothing
+    const run = longestStraightRun(cells);
+    if (run >= 5) return 'bomb';
+    if (run === 4) return 'line';
+    return null;
+  }
+  api.matchShape = matchShape;
+  /* === END TASK SECTION ml-34 === */
+
+  /* === TASK SECTION ml-35 special-anchor (add task code and api.* exports here) === */
+  function hexKeyCell(c){ return hexKey(c.q, c.r); }
+
+  function specialAnchor(board, matched, a, b){
+    // Check if played cells are in the match
+    const aKey = hexKey(a.q, a.r);
+    const bKey = hexKey(b.q, b.r);
+    if (matched && matched.has && matched.has(aKey)) return { q: a.q, r: a.r };
+    if (matched && matched.has && matched.has(bKey)) return { q: b.q, r: b.r };
+
+    // Find all cells in the matched set with their coordinates and types
+    const cells = [];
+    if (matched && typeof matched[Symbol.iterator] === 'function'){
+      for (const key of matched){
+        if (typeof key !== 'string') continue;
+        const parts = key.split(',');
+        if (parts.length !== 2) continue;
+        if (!/^[+-]?\d+$/.test(parts[0]) || !/^[+-]?\d+$/.test(parts[1])) continue;
+        const q = +parts[0], r = +parts[1];
+        if (!(key in board)) continue; // ensure it's a real board cell
+        cells.push({ q, r, s: -q - r, key, type: baseType(board[key]) });
+      }
+    }
+    if (cells.length === 0) {
+      // Fallback: if nothing found, just pick any matched cell? But task says never return non-matched
+      // Try to construct from matched keys
+      for (const key of matched || []){
+        if (typeof key === 'string' && key.includes(',')){
+          const [q,r] = key.split(',').map(Number);
+          return { q, r };
+        }
+      }
+      return { q: a.q, r: a.r };
+    }
+
+    // Find all straight runs (contiguous along axis, same monster type)
+    const runs = [];
+    // Try each axis
+    const axes = [
+      { fixed: c => c.q, step: c => c.r },
+      { fixed: c => c.r, step: c => c.q },
+      { fixed: c => c.s, step: c => c.q },
+    ];
+    for (const axis of axes){
+      const lines = new Map();
+      for (const c of cells){
+        const id = axis.fixed(c);
+        if (!lines.has(id)) lines.set(id, []);
+        lines.get(id).push(c);
+      }
+      for (const line of lines.values()){
+        line.sort((x,y) => {
+          const sx = axis.step(x), sy = axis.step(y);
+          if (sx !== sy) return sx - sy;
+          return x.key.localeCompare(y.key);
+        });
+        let i = 0;
+        while (i < line.length){
+          let j = i;
+          // Find contiguous sequence with same type starting from i
+          while (j + 1 < line.length){
+            const cur = line[j];
+            const next = line[j+1];
+            const sameType = cur.type === next.type;
+            const contiguous = axis.step(next) === axis.step(cur) + 1;
+            if (sameType && contiguous) j++;
+            else break;
+          }
+          // Sequence from i to j is a run
+          const runCells = line.slice(i, j+1);
+          if (runCells.length >= 1){ // runs in matched are >=3 typically, but be general
+            runs.push(runCells);
+          }
+          i = j + 1;
+        }
+      }
+    }
+
+    if (runs.length === 0){
+      // If no runs found, pick the cell with smallest hexKey among matched
+      const best = cells.slice().sort((x,y) => x.key.localeCompare(y.key))[0];
+      return { q: best.q, r: best.r };
+    }
+
+    // Find longest run; tie-breaker: the one containing the smallest hexKey
+    let bestRun = runs[0];
+    for (let k = 1; k < runs.length; k++){
+      const run = runs[k];
+      if (run.length > bestRun.length){
+        bestRun = run;
+        continue;
+      }
+      if (run.length === bestRun.length){
+        // tie-breaker: smallest hexKey in the run? or the run containing smallest hexKey
+        // "take the one containing the smallest hexKey" - find min key in each run
+        const minBest = bestRun.reduce((m, c) => c.key < m ? c.key : m, bestRun[0].key);
+        const minRun = run.reduce((m, c) => c.key < m ? c.key : m, run[0].key);
+        if (minRun < minBest){
+          bestRun = run;
+        }
+      }
+    }
+
+    // Return middle cell at index Math.floor((n-1)/2)
+    const n = bestRun.length;
+    const idx = Math.floor((n - 1) / 2);
+    const mid = bestRun[idx];
+    return { q: mid.q, r: mid.r };
+  }
+  api.specialAnchor = specialAnchor;
+  /* === END TASK SECTION ml-35 === */
+
+  /* === TASK SECTION ml-36 plant-special (add task code and api.* exports here) === */
+  // Turn the tile on `key` into a special: its monster stays exactly as it is
+  // (re-planting over an old special only swaps the kind), and the kind is
+  // appended with the same '+' separator the rest of the game uses.
+  // Nothing is planted on an empty cell or for a kind we cannot fire — the
+  // board is left untouched and null comes back so callers can reject it.
+  const PLANT_KINDS = ['line', 'bomb'];
+  function plantSpecial(board, key, kind){
+    if (!board || typeof key !== 'string' || PLANT_KINDS.indexOf(kind) === -1) return null;
+    if (!(key in board)) return null;
+    const tile = board[key];
+    if (typeof tile !== 'string' || tile.length === 0) return null;
+    const monster = baseType(tile);
+    if (!monster) return null;
+    const planted = makeSpecial(monster, kind);
+    board[key] = planted;
+    return planted;
+  }
+  api.plantSpecial = plantSpecial;
+  /* === END TASK SECTION ml-36 === */
+
+  /* === TASK SECTION ml-37 special-blasts (add task code and api.* exports here) === */
+  // What a special clears when it fires. Every function here is read-only:
+  // the board is only ever looked at, never written to.
+  // Index the pre-built q lines once by their constant coordinate, so a line
+  // blast is a lookup instead of a scan (the lines themselves are reused, not
+  // rebuilt).
+  const Q_LINES_BY_Q = new Map();
+  HEX_LINE_GROUPS.q.forEach(line => {
+    if (line.length) Q_LINES_BY_Q.set(line[0].q, line);
+  });
+
+  // Every board cell on the same q-line (constant q) as `key`, the cell itself
+  // included. A key outside the board has no line and clears nothing.
+  function lineBlast(board, key){
+    const blast = new Set();
+    if (typeof key !== 'string') return blast;
+    const parts = key.split(',');
+    if (parts.length !== 2 || !/^[+-]?\d+$/.test(parts[0])) return blast;
+    const line = Q_LINES_BY_Q.get(+parts[0]);
+    if (!line) return blast;
+    for (const c of line){
+      const k = hexKey(c.q, c.r);
+      if (!board || k in board) blast.add(k);
+    }
+    return blast;
+  }
+
+  // Every cell whose tile is that monster, specials included: 'gem+line' is
+  // still a gem as far as a colour bomb is concerned.
+  function cellsOfType(board, type){
+    const found = new Set();
+    if (!board || typeof type !== 'string' || type.length === 0) return found;
+    for (const k in board) if (baseType(board[k]) === type) found.add(k);
+    return found;
+  }
+
+  // The cells the special sitting at `key` clears: a line blaster takes its
+  // whole q-line, a colour bomb takes every tile of `swapType` (the monster it
+  // was swapped with) and falls back to its own monster when there is none,
+  // and a plain tile clears nothing on its own.
+  function specialTargets(board, key, swapType){
+    if (!board || typeof key !== 'string' || !(key in board)) return new Set();
+    const kind = specialOf(board[key]);
+    if (kind === 'line') return lineBlast(board, key);
+    if (kind === 'bomb') return cellsOfType(board, swapType || baseType(board[key]));
+    return new Set();
+  }
+
+  api.lineBlast = lineBlast;
+  api.cellsOfType = cellsOfType;
+  api.specialTargets = specialTargets;
+  /* === END TASK SECTION ml-37 === */
+
+  /* === TASK SECTION ml-38 special-chain (add task code and api.* exports here) === */
+  // Every cell a set of blasts ends up clearing: any special caught by the set
+  // fires too, and whatever its blast catches may hold another special, and so
+  // on until nothing new turns up. The input Set and the board are both left
+  // exactly as they were — the caller owns them, we only read.
+  // Specials fire in sorted-key order so the chain (and therefore the result)
+  // never depends on Set iteration order, and each one fires exactly once even
+  // if several blasts cover it.
+  function chainSpecials(board, targets, swapType){
+    const result = (targets && typeof targets[Symbol.iterator] === 'function')
+      ? new Set(targets)
+      : new Set();
+    const fired = new Set();
+    for (;;){
+      // Anything new still sitting in the result that can actually fire.
+      const pending = [];
+      for (const key of result){
+        if (fired.has(key)) continue;
+        if (!board || typeof key !== 'string' || !(key in board) || specialOf(board[key]) === null){
+          fired.add(key); // not a special (or not a cell): it will never fire
+          continue;
+        }
+        pending.push(key);
+      }
+      if (pending.length === 0) break;
+      pending.sort();
+      for (const key of pending){
+        fired.add(key);
+        for (const k of specialTargets(board, key, swapType)) result.add(k);
+      }
+    }
+    return result;
+  }
+  api.chainSpecials = chainSpecials;
+  /* === END TASK SECTION ml-38 === */
 
   return api;
 });
