@@ -468,5 +468,117 @@
   api.matchShape = matchShape;
   /* === END TASK SECTION ml-34 === */
 
+  /* === TASK SECTION ml-35 special-anchor (add task code and api.* exports here) === */
+  function hexKeyCell(c){ return hexKey(c.q, c.r); }
+
+  function specialAnchor(board, matched, a, b){
+    // Check if played cells are in the match
+    const aKey = hexKey(a.q, a.r);
+    const bKey = hexKey(b.q, b.r);
+    if (matched && matched.has && matched.has(aKey)) return { q: a.q, r: a.r };
+    if (matched && matched.has && matched.has(bKey)) return { q: b.q, r: b.r };
+
+    // Find all cells in the matched set with their coordinates and types
+    const cells = [];
+    if (matched && typeof matched[Symbol.iterator] === 'function'){
+      for (const key of matched){
+        if (typeof key !== 'string') continue;
+        const parts = key.split(',');
+        if (parts.length !== 2) continue;
+        if (!/^[+-]?\d+$/.test(parts[0]) || !/^[+-]?\d+$/.test(parts[1])) continue;
+        const q = +parts[0], r = +parts[1];
+        if (!(key in board)) continue; // ensure it's a real board cell
+        cells.push({ q, r, s: -q - r, key, type: baseType(board[key]) });
+      }
+    }
+    if (cells.length === 0) {
+      // Fallback: if nothing found, just pick any matched cell? But task says never return non-matched
+      // Try to construct from matched keys
+      for (const key of matched || []){
+        if (typeof key === 'string' && key.includes(',')){
+          const [q,r] = key.split(',').map(Number);
+          return { q, r };
+        }
+      }
+      return { q: a.q, r: a.r };
+    }
+
+    // Find all straight runs (contiguous along axis, same monster type)
+    const runs = [];
+    // Try each axis
+    const axes = [
+      { fixed: c => c.q, step: c => c.r },
+      { fixed: c => c.r, step: c => c.q },
+      { fixed: c => c.s, step: c => c.q },
+    ];
+    for (const axis of axes){
+      const lines = new Map();
+      for (const c of cells){
+        const id = axis.fixed(c);
+        if (!lines.has(id)) lines.set(id, []);
+        lines.get(id).push(c);
+      }
+      for (const line of lines.values()){
+        line.sort((x,y) => {
+          const sx = axis.step(x), sy = axis.step(y);
+          if (sx !== sy) return sx - sy;
+          return x.key.localeCompare(y.key);
+        });
+        let i = 0;
+        while (i < line.length){
+          let j = i;
+          // Find contiguous sequence with same type starting from i
+          while (j + 1 < line.length){
+            const cur = line[j];
+            const next = line[j+1];
+            const sameType = cur.type === next.type;
+            const contiguous = axis.step(next) === axis.step(cur) + 1;
+            if (sameType && contiguous) j++;
+            else break;
+          }
+          // Sequence from i to j is a run
+          const runCells = line.slice(i, j+1);
+          if (runCells.length >= 1){ // runs in matched are >=3 typically, but be general
+            runs.push(runCells);
+          }
+          i = j + 1;
+        }
+      }
+    }
+
+    if (runs.length === 0){
+      // If no runs found, pick the cell with smallest hexKey among matched
+      const best = cells.slice().sort((x,y) => x.key.localeCompare(y.key))[0];
+      return { q: best.q, r: best.r };
+    }
+
+    // Find longest run; tie-breaker: the one containing the smallest hexKey
+    let bestRun = runs[0];
+    for (let k = 1; k < runs.length; k++){
+      const run = runs[k];
+      if (run.length > bestRun.length){
+        bestRun = run;
+        continue;
+      }
+      if (run.length === bestRun.length){
+        // tie-breaker: smallest hexKey in the run? or the run containing smallest hexKey
+        // "take the one containing the smallest hexKey" - find min key in each run
+        const minBest = bestRun.reduce((m, c) => c.key < m ? c.key : m, bestRun[0].key);
+        const minRun = run.reduce((m, c) => c.key < m ? c.key : m, run[0].key);
+        if (minRun < minBest){
+          bestRun = run;
+        }
+      }
+    }
+
+    // Return middle cell at index Math.floor((n-1)/2)
+    const n = bestRun.length;
+    const idx = Math.floor((n - 1) / 2);
+    const mid = bestRun[idx];
+    return { q: mid.q, r: mid.r };
+  }
+  api.specialAnchor = specialAnchor;
+  /* === END TASK SECTION ml-35 === */
+
   return api;
 });
