@@ -390,6 +390,39 @@
     25%{ scale:1.25; opacity:1; filter:brightness(2.8) drop-shadow(0 0 12px var(--gold-bright)); animation-timing-function:ease-in; }
     100%{ scale:0; opacity:0; filter:brightness(2.2) drop-shadow(0 0 5px var(--gold-bright)); }
   }
+  /* ==== ML-JUICE: special bursts ====
+     A special that fires bursts in its own way, so the player can tell which one
+     went off and what it did. Each kind wears data-special (set on the tile when
+     it is created) and gets a rule written after the per-monster and burst pops
+     above -- and repeated with [data-type] (0,4,0), the same trick the bursts
+     use -- so it always beats the ordinary monster pop (0,3,0) of whichever
+     monster carries it. Both end on scale:0 with opacity:0, so the tile still
+     visibly leaves the board, both move only scale/rotate/opacity/filter (never
+     translate, which belongs to the hex positioning), and both stay well under
+     the 1 s cap: 440ms and 500ms, inside the 560ms huge-burst reference and the
+     MATCH_POP_BACKSTOP_MS / MAX_POP_MS guards. The filter list is the same
+     brightness + drop-shadow shape at every stop so the flash and glow ramp
+     smoothly (drop-shadow glows through the hex clip-path, box-shadow does not). */
+  /* line blaster -- a quick bright slash: the tile stretches thin along the line
+     it clears, flashes hard, and is gone. */
+  .tile.matchPop[data-special="line"],
+  .tile.matchPop[data-special="line"][data-type]{ animation:popSpecialLine .44s ease-out forwards; }
+  @keyframes popSpecialLine{
+    0%{ scale:1; rotate:0deg; opacity:1; filter:brightness(1) drop-shadow(0 0 0 transparent); }
+    22%{ scale:0.36 1.55; rotate:-10deg; opacity:1; filter:brightness(3.4) drop-shadow(0 0 16px var(--gold-bright)); }
+    56%{ scale:0.22 1.7; rotate:-5deg; opacity:0.85; filter:brightness(2.5) drop-shadow(0 0 12px var(--gold-bright)); }
+    100%{ scale:0; rotate:0deg; opacity:0; filter:brightness(2.1) drop-shadow(0 0 6px var(--gold-bright)); }
+  }
+  /* colour bomb -- a round flash: it swells outward in every direction, holds a
+     beat, then folds back to nothing. */
+  .tile.matchPop[data-special="bomb"],
+  .tile.matchPop[data-special="bomb"][data-type]{ animation:popSpecialBomb .5s ease-out forwards; }
+  @keyframes popSpecialBomb{
+    0%{ scale:0.9; opacity:1; filter:brightness(1) drop-shadow(0 0 0 transparent); }
+    32%{ scale:1.75; opacity:1; filter:brightness(3.1) drop-shadow(0 0 18px var(--gold-bright)); }
+    62%{ scale:1.42; opacity:0.9; filter:brightness(2.5) drop-shadow(0 0 14px var(--gold-bright)); }
+    100%{ scale:0; opacity:0; filter:brightness(2.1) drop-shadow(0 0 6px var(--gold-bright)); }
+  }
   .tile.spawning{ opacity:0; scale:0.3; }
 
   .power-flash{
@@ -1442,11 +1475,15 @@ async function attemptSwap(a, b){
   const typeB = session.board[kb];
   swapHex(session.board, a, b);
   const matched = findMatches(session.board);
-  // A colour bomb swapped with anything is a legal move even when it makes no
-  // match: it clears with its own blast instead of matching, so the swap is
-  // never reverted. A plain tile still needs a match to go through.
-  const bombBlast = matched.size === 0 ? MatchLogic.bombSwapBlast(session.board, a, b) : null;
-  if (matched.size === 0 && !bombBlast){
+  // Two specials swapped together are a legal move even when they make no
+  // match: they combine into a bigger blast (line blasters take both axes, a
+  // colour bomb takes both monsters) instead of matching. Otherwise a colour
+  // bomb swapped with a plain tile still clears with its own blast as before.
+  // A plain tile still needs a match to go through.
+  const combineBlast = matched.size === 0 ? MatchLogic.combineSwapBlast(session.board, a, b) : null;
+  const bombBlast = (matched.size === 0 && !combineBlast) ? MatchLogic.bombSwapBlast(session.board, a, b) : null;
+  const noMatchBlast = combineBlast || bombBlast;
+  if (matched.size === 0 && !noMatchBlast){
     swapHex(session.board, a, b); // revert data
     Sound.swapInvalid();
     await animateSwap(a,b, true); // visual swap-and-back
@@ -1467,7 +1504,7 @@ async function attemptSwap(a, b){
   // findMatches attached to the match rides along on the grown set.
   let expanded;
   if (matched.size === 0){
-    expanded = bombBlast;
+    expanded = noMatchBlast;
   } else {
     const baseA = MatchLogic.baseType(typeA);
     const baseB = MatchLogic.baseType(typeB);
@@ -1481,7 +1518,18 @@ async function attemptSwap(a, b){
     expanded.runLen = matched.runLen;
     expanded.burstClass = matched.burstClass;
   }
-  await resolveCascade(expanded, 1);
+  // Which special the player's own swap earned, read from the first match set
+  // alone (the one findMatches() returned, before special blasts grow it), so a
+  // power's clear and the later cascade steps can never name one. resolveCascade
+  // holds that cell in place while it runs; the match itself is still scored and
+  // counted whole.
+  const earnedSpecial = (matched.size > 0 && window.MatchLogic
+    && typeof window.MatchLogic.matchShape === 'function')
+    ? playerSpecialTarget(matched, a, b) : null;
+  await resolveCascade(expanded, 1, earnedSpecial ? earnedSpecial.key : null);
+  // The cascade has settled: the held cell becomes the special the match earned
+  // and its tile is repainted, all before the move is counted.
+  plantPlayerSpecial(earnedSpecial);
   if (session.mode === 'solo'){
     session.movesLeft -= 1;
     updateSoloHud();
@@ -1522,7 +1570,9 @@ function swipeStillMatches(swipe){
   if (!isHexAdjacent(a,b)) return false;
   const probe = { ...session.board };
   swapHex(probe, a, b);
-  // A colour bomb swapped with anything is legal with or without a match.
+  // Two specials swapped together / a colour bomb swapped with anything are
+  // legal with or without a match.
+  if (MatchLogic.combineSwapBlast(probe, a, b)) return true;
   if (MatchLogic.bombSwapBlast(probe, a, b)) return true;
   return findMatches(probe).size > 0;
 }
@@ -1557,7 +1607,67 @@ async function animateSwap(a,b, revert){
   elB.dataset.q = a.q; elB.dataset.r = a.r;
 }
 
-async function resolveCascade(firstMatch, comboStart){
+// Which special, if any, the player's own match earned, and the cell it belongs
+// on. Read from the first match set alone -- before special blasts grow it -- so
+// a power's clear and the later cascade steps can never name one: a plain
+// 3-match (or anything that is not a straight run of 4+) returns null, a run of
+// 4 a 'line', a run of 5+ a 'bomb'. The anchor is the swapped cell the match
+// covers, so the special appears where the thumb played.
+function playerSpecialTarget(firstMatched, a, b){
+  const ML = window.MatchLogic;
+  if (!ML || typeof ML.matchShape !== 'function' || typeof ML.specialAnchor !== 'function') return null;
+  const kind = ML.matchShape(firstMatched);
+  if (!kind) return null;
+  const anchor = ML.specialAnchor(session.board, firstMatched, a, b);
+  if (!anchor || typeof anchor.q !== 'number' || typeof anchor.r !== 'number') return null;
+  const key = hexKey(anchor.q, anchor.r);
+  if (!(key in session.board)) return null;
+  return { kind, key };
+}
+
+// Put the earned special on the board once the cascade has settled. The held
+// tile -- its monster kept alive by resolveCascade -- becomes that monster plus
+// the kind, and the tile element is repainted so the board and what is drawn on
+// it agree. Nothing is planted when the match earned nothing.
+function plantPlayerSpecial(target){
+  if (!target) return null;
+  const ML = window.MatchLogic;
+  if (!ML || typeof ML.plantSpecial !== 'function') return null;
+  const planted = ML.plantSpecial(session.board, target.key, target.kind);
+  if (!planted) return null;
+  const el = session.elMap[target.key];
+  if (el){
+    const monster = ML.baseType(session.board[target.key]);
+    el.innerHTML = MonsterTiles.monsterTileSVG(monster);
+    el.dataset.type = monster;
+    el.dataset.special = target.kind;
+  }
+  return planted;
+}
+
+// The held cell rides through the fall as a survivor, but computeCollapse()
+// packs a column down toward its bottom end: a survivor above a gap would slide
+// one cell and leave the player's own cell to whatever fell in from above. The
+// plan is re-pointed so the held tile keeps its own cell and the tile that was
+// going to land there takes the held tile's place; the two board values the
+// plan just wrote are swapped to match.
+function pinHeldCell(plan, board, key){
+  const [q, r] = key.split(',').map(Number);
+  const held = plan.find(p => p.q === q && p.fromR === r);
+  if (!held || held.toR === r) return;
+  const displaced = plan.find(p => p.q === q && p.toR === r && p !== held);
+  if (!displaced) return;
+  const landing = held.toR;
+  held.toR = r;
+  displaced.toR = landing;
+  const heldKey = hexKey(q, r);
+  const otherKey = hexKey(q, landing);
+  const tmp = board[heldKey];
+  board[heldKey] = board[otherKey];
+  board[otherKey] = tmp;
+}
+
+async function resolveCascade(firstMatch, comboStart, heldKey){
   cascadeBeats = [];
   lastCascadeRecord = [];
   let matched = firstMatch;
@@ -1603,13 +1713,16 @@ async function resolveCascade(firstMatch, comboStart){
     // swell (the bigger moment of a 4+ match) is held first; a player who asked
     // for reduced motion or turned effects off skips it and the burst entirely
     // (no animation to wait for), so those steps only ever wait one frame.
+    // The held cell (the one the player's special is planted on) never pops and
+    // never reaches the collapse as a gap, so it is taken out of the clearing
+    // set here. The score above already counted the whole match. A cleared
+    // special keeps its data-special so its own burst can play (the tile is
+    // removed by the collapse, so the mark never outlives it).
+    const clearing = heldKey ? new Set([...matched].filter(key => key !== heldKey)) : matched;
     const clearedEls = [];
-    matched.forEach(key=>{
+    clearing.forEach(key=>{
       const el = session.elMap[key];
-      if (el){
-        delete el.dataset.special; // a cleared special keeps no stale mark
-        clearedEls.push(el);
-      }
+      if (el) clearedEls.push(el);
     });
     const motionWanted = matchPopWanted();
     if (motionWanted && beat.swell > 0) await sleep(beat.swell);
@@ -1623,7 +1736,8 @@ async function resolveCascade(firstMatch, comboStart){
     await waitBurstEnd(clearedEls, beat.pop, motionWanted);
     const popEndedAt = performance.now();
     // compute collapse plan and animate fall
-    const plan = computeCollapse(session.board, matched);
+    const plan = computeCollapse(session.board, clearing);
+    if (heldKey) pinHeldCell(plan, session.board, heldKey);
     const fall = await animateCollapse(plan, clearedEls, beat.fall, motionWanted);
     lastCascadeRecord.push({ run: maxRun, popStartedAt, popEndedAt, ...fall });
     matched = findMatches(session.board);

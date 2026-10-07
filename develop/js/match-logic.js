@@ -724,5 +724,66 @@
   api.bombSwapBlast = bombSwapBlast;
   /* === END TASK SECTION ml-42 === */
 
+  /* === TASK SECTION ml-45 combine-swap (add task code and api.* exports here) === */
+  // Swapping two specials together is a legal move with a bigger effect than a
+  // single special, and it does not need to make a match. The board is read as
+  // it stands AFTER the two tiles traded places, exactly like bombSwapBlast, and
+  // is never written to. A pair only combines when BOTH cells hold a special
+  // kind; a special swapped with a plain tile is not a combine (null) and stays
+  // a plain swap that must match to be legal.
+  //
+  // The r-axis counterpart of lineBlast: every board cell on the same r-line
+  // (constant r) as `key`, the cell itself included. Same rules as the q-axis —
+  // a key off the board, or a malformed one, clears nothing.
+  const R_LINES_BY_R = new Map();
+  HEX_LINE_GROUPS.r.forEach(line => {
+    if (line.length) R_LINES_BY_R.set(line[0].r, line);
+  });
+
+  function rLineBlast(board, key){
+    const blast = new Set();
+    if (typeof key !== 'string') return blast;
+    const parts = key.split(',');
+    if (parts.length !== 2 || !/^[+-]?\d+$/.test(parts[1])) return blast;
+    const line = R_LINES_BY_R.get(+parts[1]);
+    if (!line) return blast;
+    for (const c of line){
+      const k = hexKey(c.q, c.r);
+      if (!board || k in board) blast.add(k);
+    }
+    return blast;
+  }
+
+  // What swapping two specials together clears. Two line blasters take the
+  // q-line through a's cell (reusing lineBlast) plus the r-line through b's
+  // cell. A pair containing a colour bomb is bigger still: every tile of both
+  // swapped tiles' monsters, the bomb's own and the partner's (specials
+  // included). Either way the whole set is run through chainSpecials so any
+  // special it catches fires in turn.
+  function combineSwapBlast(board, a, b){
+    if (!board || !a || !b) return null;
+    const ka = hexKey(a.q, a.r), kb = hexKey(b.q, b.r);
+    if (!(ka in board) || !(kb in board)) return null;
+    const atA = board[ka], atB = board[kb];
+    const kindA = specialOf(atA), kindB = specialOf(atB);
+    if (kindA === null || kindB === null) return null; // a plain tile is not a combine
+
+    if (kindA === 'bomb' || kindB === 'bomb'){
+      // Every tile of both monsters, bomb's own and partner's alike.
+      const blast = new Set();
+      cellsOfType(board, baseType(atA)).forEach(key => blast.add(key));
+      cellsOfType(board, baseType(atB)).forEach(key => blast.add(key));
+      return chainSpecials(board, blast);
+    }
+
+    // Two line blasters: the q-line through a's cell and the r-line through b's.
+    const blast = lineBlast(board, ka);
+    rLineBlast(board, kb).forEach(key => blast.add(key));
+    return chainSpecials(board, blast);
+  }
+  api.rLineBlast = rLineBlast;
+  api.combineSwapBlast = combineSwapBlast;
+  /* === END TASK SECTION ml-45 === */
+
   return api;
 });
