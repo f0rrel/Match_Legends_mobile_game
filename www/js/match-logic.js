@@ -601,5 +601,58 @@
   api.plantSpecial = plantSpecial;
   /* === END TASK SECTION ml-36 === */
 
+  /* === TASK SECTION ml-37 special-blasts (add task code and api.* exports here) === */
+  // What a special clears when it fires. Every function here is read-only:
+  // the board is only ever looked at, never written to.
+  // Index the pre-built q lines once by their constant coordinate, so a line
+  // blast is a lookup instead of a scan (the lines themselves are reused, not
+  // rebuilt).
+  const Q_LINES_BY_Q = new Map();
+  HEX_LINE_GROUPS.q.forEach(line => {
+    if (line.length) Q_LINES_BY_Q.set(line[0].q, line);
+  });
+
+  // Every board cell on the same q-line (constant q) as `key`, the cell itself
+  // included. A key outside the board has no line and clears nothing.
+  function lineBlast(board, key){
+    const blast = new Set();
+    if (typeof key !== 'string') return blast;
+    const parts = key.split(',');
+    if (parts.length !== 2 || !/^[+-]?\d+$/.test(parts[0])) return blast;
+    const line = Q_LINES_BY_Q.get(+parts[0]);
+    if (!line) return blast;
+    for (const c of line){
+      const k = hexKey(c.q, c.r);
+      if (!board || k in board) blast.add(k);
+    }
+    return blast;
+  }
+
+  // Every cell whose tile is that monster, specials included: 'gem+line' is
+  // still a gem as far as a colour bomb is concerned.
+  function cellsOfType(board, type){
+    const found = new Set();
+    if (!board || typeof type !== 'string' || type.length === 0) return found;
+    for (const k in board) if (baseType(board[k]) === type) found.add(k);
+    return found;
+  }
+
+  // The cells the special sitting at `key` clears: a line blaster takes its
+  // whole q-line, a colour bomb takes every tile of `swapType` (the monster it
+  // was swapped with) and falls back to its own monster when there is none,
+  // and a plain tile clears nothing on its own.
+  function specialTargets(board, key, swapType){
+    if (!board || typeof key !== 'string' || !(key in board)) return new Set();
+    const kind = specialOf(board[key]);
+    if (kind === 'line') return lineBlast(board, key);
+    if (kind === 'bomb') return cellsOfType(board, swapType || baseType(board[key]));
+    return new Set();
+  }
+
+  api.lineBlast = lineBlast;
+  api.cellsOfType = cellsOfType;
+  api.specialTargets = specialTargets;
+  /* === END TASK SECTION ml-37 === */
+
   return api;
 });
