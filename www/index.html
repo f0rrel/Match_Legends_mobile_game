@@ -390,6 +390,39 @@
     25%{ scale:1.25; opacity:1; filter:brightness(2.8) drop-shadow(0 0 12px var(--gold-bright)); animation-timing-function:ease-in; }
     100%{ scale:0; opacity:0; filter:brightness(2.2) drop-shadow(0 0 5px var(--gold-bright)); }
   }
+  /* ==== ML-JUICE: special bursts ====
+     A special that fires bursts in its own way, so the player can tell which one
+     went off and what it did. Each kind wears data-special (set on the tile when
+     it is created) and gets a rule written after the per-monster and burst pops
+     above -- and repeated with [data-type] (0,4,0), the same trick the bursts
+     use -- so it always beats the ordinary monster pop (0,3,0) of whichever
+     monster carries it. Both end on scale:0 with opacity:0, so the tile still
+     visibly leaves the board, both move only scale/rotate/opacity/filter (never
+     translate, which belongs to the hex positioning), and both stay well under
+     the 1 s cap: 440ms and 500ms, inside the 560ms huge-burst reference and the
+     MATCH_POP_BACKSTOP_MS / MAX_POP_MS guards. The filter list is the same
+     brightness + drop-shadow shape at every stop so the flash and glow ramp
+     smoothly (drop-shadow glows through the hex clip-path, box-shadow does not). */
+  /* line blaster -- a quick bright slash: the tile stretches thin along the line
+     it clears, flashes hard, and is gone. */
+  .tile.matchPop[data-special="line"],
+  .tile.matchPop[data-special="line"][data-type]{ animation:popSpecialLine .44s ease-out forwards; }
+  @keyframes popSpecialLine{
+    0%{ scale:1; rotate:0deg; opacity:1; filter:brightness(1) drop-shadow(0 0 0 transparent); }
+    22%{ scale:0.36 1.55; rotate:-10deg; opacity:1; filter:brightness(3.4) drop-shadow(0 0 16px var(--gold-bright)); }
+    56%{ scale:0.22 1.7; rotate:-5deg; opacity:0.85; filter:brightness(2.5) drop-shadow(0 0 12px var(--gold-bright)); }
+    100%{ scale:0; rotate:0deg; opacity:0; filter:brightness(2.1) drop-shadow(0 0 6px var(--gold-bright)); }
+  }
+  /* colour bomb -- a round flash: it swells outward in every direction, holds a
+     beat, then folds back to nothing. */
+  .tile.matchPop[data-special="bomb"],
+  .tile.matchPop[data-special="bomb"][data-type]{ animation:popSpecialBomb .5s ease-out forwards; }
+  @keyframes popSpecialBomb{
+    0%{ scale:0.9; opacity:1; filter:brightness(1) drop-shadow(0 0 0 transparent); }
+    32%{ scale:1.75; opacity:1; filter:brightness(3.1) drop-shadow(0 0 18px var(--gold-bright)); }
+    62%{ scale:1.42; opacity:0.9; filter:brightness(2.5) drop-shadow(0 0 14px var(--gold-bright)); }
+    100%{ scale:0; opacity:0; filter:brightness(2.1) drop-shadow(0 0 6px var(--gold-bright)); }
+  }
   .tile.spawning{ opacity:0; scale:0.3; }
 
   .power-flash{
@@ -1676,15 +1709,14 @@ async function resolveCascade(firstMatch, comboStart, heldKey){
     // (no animation to wait for), so those steps only ever wait one frame.
     // The held cell (the one the player's special is planted on) never pops and
     // never reaches the collapse as a gap, so it is taken out of the clearing
-    // set here. The score above already counted the whole match.
+    // set here. The score above already counted the whole match. A cleared
+    // special keeps its data-special so its own burst can play (the tile is
+    // removed by the collapse, so the mark never outlives it).
     const clearing = heldKey ? new Set([...matched].filter(key => key !== heldKey)) : matched;
     const clearedEls = [];
     clearing.forEach(key=>{
       const el = session.elMap[key];
-      if (el){
-        delete el.dataset.special; // a cleared special keeps no stale mark
-        clearedEls.push(el);
-      }
+      if (el) clearedEls.push(el);
     });
     const motionWanted = matchPopWanted();
     if (motionWanted && beat.swell > 0) await sleep(beat.swell);
