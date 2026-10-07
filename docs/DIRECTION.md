@@ -7,19 +7,17 @@ A bright, cute and competitive match-3 with funny monsters. Quick games (≤3 mi
 Mainly women 20–55, casual phone players. Short sessions on a phone, portrait mode, played with one thumb. English first; text kept ready for translation.
 
 ## Feel (every change is judged against this)
-Bright · flashy · juicy · cute · competitive. Every action gets visible, satisfying feedback. Big moments (specials, powers, wins) must feel big: you should see and hear them. Never overdo the colors: readability comes first.
+Bright · flashy · juicy · cute · competitive. Every action gets visible, satisfying feedback. Big moments (specials, powers, wins) must feel big: you should see and hear them. Never overdo the colors: readability comes first. Every match bursts particles in its colour; cascades escalate (sound, callout, shake). Specials combine (line+line, line+bomb, bomb+bomb). Winning ends with a "fever" where leftover moves turn into specials that go off one by one.
 
 ## Never change
 - A square board (rows and columns) that fills a portrait phone screen.
-- Core matching: 3 or more of the same monster in a row or column.
+- Core matching: 3 or more of the same tiles in a row or column.
 - Games last ≤3 minutes.
 - Free to play, no real money.
 
 ## Look
-- Tiles are cute monster faces from image files (www/assets/tiles/), with the code-drawn SVG monsters as a fallback when an image is missing. Each type has its own silhouette AND color, so tiles are distinguishable even without color. Readable on a small phone.
-- Special tiles never look like normal tiles: a line blaster shows its direction, a bomb glows and pulses. The monster stays visible underneath.
-- Avatars are monster characters in a Hotel-Transylvania-like style: ridiculous and lovable (a fly, a blob, a tiny vampire…). Portraits are AI-generated in one fixed style; the owner picks from candidates.
-- Effects are readable, not rushed: a normal 3-match takes about 0.4–0.6 s from pop to falling tiles. Bigger matches get a bigger moment: tiles swell for a split second, then burst; up to about 1 s for 5+ matches and combos. A power gets its own moment of up to about 1.2 s: the screen dims, the avatar appears, the board shakes. Taps are never lost (queued during effects). Reduced motion and the effects toggle make everything short again.
+-- Tiles are simple glossy jewels drawn in code: six colours, each with its own simple shape (circle, square, triangle, diamond, hexagon, star), so they are readable even without colour. All the excitement goes into specials, combos and effects, not into the normal tiles.
+- The monster characters live in the avatars and the power moments, not on the board.
 
 ## Modes
 - Normal (solo): endless levels generated from a seed, with a move limit (≈20 moves); leftover moves become a bonus. Goals rotate: score target, collect X of a monster, clear blockers. Difficulty rises slowly with regular easier "breather" levels. Levels are grouped into worlds, one world = one hotel floor. 1–3 stars per level.
