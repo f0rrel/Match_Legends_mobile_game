@@ -1138,6 +1138,9 @@ function spawnScorePopup(matchedSet, points, combo){
    GAME SESSION
 ========================================================= */
 let session = null; // active game session object
+// The one swipe the player made while the board was busy: the most recent
+// real drag is kept, any older waiting one is replaced. Not played yet (ml-31).
+let queuedSwap = null;
 // The beats the last resolveCascade() actually played, one per clearing step,
 // copied from MatchLogic.matchBeat(run) as they were played.
 let cascadeBeats = [];
@@ -1153,6 +1156,8 @@ window.__ML_TEST__ = {
   appState: () => appState,
   lastBeats: () => cascadeBeats.map(b => ({ ...b })),
   lastCascade: () => lastCascadeRecord.map(e => ({ ...e })),
+  // How many swipes are waiting to be played once the board is free.
+  queuedSwaps: () => (queuedSwap ? 1 : 0),
   // Put a board (specials included) straight into the level in play and repaint
   // it, so a test can set up a position no deal would ever hand out.
   setBoard: (board) => {
@@ -1332,6 +1337,7 @@ function battleTick(){
 }
 function endBattle(playerWon){
   if (!session || session.ended) return;
+  queuedSwap = null;
   session.ended = true;
   clearInterval(session.clockTimer);
   clearTimeout(session.aiTimer);
@@ -1403,19 +1409,25 @@ function angleToHexDir(dx,dy){
 function bindBoardEvents(){
   let start = null;
   boardEl.onpointerdown = (e)=>{
-    if (!session || session.busy) return;
+    if (!session) return;
     const t = e.target.closest('.tile'); if (!t) return;
     if (t.setPointerCapture) { try { t.setPointerCapture(e.pointerId); } catch(err){} }
     start = { q:+t.dataset.q, r:+t.dataset.r, x:e.clientX, y:e.clientY };
   };
   boardEl.onpointerup = (e)=>{
-    if (!start || !session || session.busy) return;
+    if (!start || !session) return;
     const s = start; start = null;
     const dx = e.clientX - s.x, dy = e.clientY - s.y;
     if (Math.hypot(dx,dy) < 18) return;
     const [dq,dr] = angleToHexDir(dx,dy);
     const target = { q:s.q+dq, r:s.r+dr };
     if (!(hexKey(target.q,target.r) in session.board)) return;
+    // Busy board: remember this swipe as the one waiting one (the most recent
+    // swipe wins) and play nothing -- the board decides what to do with it.
+    if (session.busy){
+      queuedSwap = { a: { q: s.q, r: s.r }, b: { q: target.q, r: target.r } };
+      return;
+    }
     attemptSwap({q:s.q,r:s.r}, target);
   };
 }
@@ -1424,28 +1436,105 @@ async function attemptSwap(a, b){
   if (!isHexAdjacent(a,b) || session.busy) return;
   session.busy = true;
   clearHint();
+  const ka = hexKey(a.q,a.r);
+  const kb = hexKey(b.q,b.r);
+  const typeA = session.board[ka];
+  const typeB = session.board[kb];
   swapHex(session.board, a, b);
   const matched = findMatches(session.board);
-  if (matched.size === 0){
+  // A colour bomb swapped with anything is a legal move even when it makes no
+  // match: it clears with its own blast instead of matching, so the swap is
+  // never reverted. A plain tile still needs a match to go through.
+  const bombBlast = matched.size === 0 ? MatchLogic.bombSwapBlast(session.board, a, b) : null;
+  if (matched.size === 0 && !bombBlast){
     swapHex(session.board, a, b); // revert data
     Sound.swapInvalid();
     await animateSwap(a,b, true); // visual swap-and-back
     session.busy = false;
+    await flushQueuedSwap();
     return;
   }
   // valid: play swap visually then resolve
   await animateSwap(a,b,false);
-  await resolveCascade(matched, 1);
+  // What this move clears. A colour bomb swap with no match clears exactly its
+  // blast (the bomb cell plus the monster it was swapped with, specials chained);
+  // a match detonates matched specials before any score is worked out: the match
+  // grows with every cell each matched cell's blast reaches, then chainSpecials
+  // sets off whatever the blasts caught in turn. swapPartnerType is the monster of
+  // the tile that stood in the swapped cell the match picked up (the tile the
+  // matched tile was swapped with), or null when neither swapped cell matched.
+  // The extra cells a blast clears are the only scoring change, so the run data
+  // findMatches attached to the match rides along on the grown set.
+  let expanded;
+  if (matched.size === 0){
+    expanded = bombBlast;
+  } else {
+    const baseA = MatchLogic.baseType(typeA);
+    const baseB = MatchLogic.baseType(typeB);
+    const swapPartnerType = matched.has(ka) ? baseA : (matched.has(kb) ? baseB : null);
+    expanded = new Set(matched);
+    matched.forEach(cellKey=>{
+      MatchLogic.specialTargets(session.board, cellKey, swapPartnerType)
+        .forEach(t=> expanded.add(t));
+    });
+    expanded = MatchLogic.chainSpecials(session.board, expanded, swapPartnerType);
+    expanded.runLen = matched.runLen;
+    expanded.burstClass = matched.burstClass;
+  }
+  await resolveCascade(expanded, 1);
   if (session.mode === 'solo'){
     session.movesLeft -= 1;
     updateSoloHud();
     // A level still in play stays resumable; one that just ended has been cleared.
-    if (!checkSoloEnd()) saveSoloSession();
+    const ended = checkSoloEnd();
+    if (!ended) saveSoloSession();
+    session.busy = false;
+    if (ended) {
+      queuedSwap = null;
+    } else {
+      await flushQueuedSwap();
+    }
+    return;
   } else {
     updateBattleHud();
-    if (session.score >= BATTLE_TARGET) { session.busy=false; endBattle(true); return; }
+    if (session.score >= BATTLE_TARGET) {
+      queuedSwap = null;
+      session.busy = false;
+      endBattle(true);
+      return;
+    }
+    session.busy = false;
+    await flushQueuedSwap();
+    return;
   }
-  session.busy = false;
+}
+
+// A remembered swipe is only played if it still matches the board as it is
+// *now*: while the swipe waited, the board may have changed under it (a
+// cascade fell, a level restarted). The verdict is reached on a copy of the
+// board, so this check can never touch the real one.
+function swipeStillMatches(swipe){
+  if (!session || !swipe || !swipe.a || !swipe.b) return false;
+  const { a, b } = swipe;
+  // Either cell no longer on the board, or the pair not adjacent: nothing to play.
+  if (!(hexKey(a.q,a.r) in session.board)) return false;
+  if (!(hexKey(b.q,b.r) in session.board)) return false;
+  if (!isHexAdjacent(a,b)) return false;
+  const probe = { ...session.board };
+  swapHex(probe, a, b);
+  // A colour bomb swapped with anything is legal with or without a match.
+  if (MatchLogic.bombSwapBlast(probe, a, b)) return true;
+  return findMatches(probe).size > 0;
+}
+
+async function flushQueuedSwap(){
+  const swipe = queuedSwap;
+  queuedSwap = null;
+  if (!swipe) return;
+  // Stale swipe: dropped quietly -- no swap-and-back wiggle, no invalid-swap
+  // sound, no move or score change.
+  if (!swipeStillMatches(swipe)) return;
+  await attemptSwap(swipe.a, swipe.b);
 }
 
 async function animateSwap(a,b, revert){
@@ -1517,7 +1606,10 @@ async function resolveCascade(firstMatch, comboStart){
     const clearedEls = [];
     matched.forEach(key=>{
       const el = session.elMap[key];
-      if (el) clearedEls.push(el);
+      if (el){
+        delete el.dataset.special; // a cleared special keeps no stale mark
+        clearedEls.push(el);
+      }
     });
     const motionWanted = matchPopWanted();
     if (motionWanted && beat.swell > 0) await sleep(beat.swell);

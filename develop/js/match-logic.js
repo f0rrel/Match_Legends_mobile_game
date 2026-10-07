@@ -690,5 +690,39 @@
   api.chainSpecials = chainSpecials;
   /* === END TASK SECTION ml-38 === */
 
+  /* === TASK SECTION ml-42 colour-bomb-swap (add task code and api.* exports here) === */
+  // What a swap with a colour bomb on one side clears. The board is read AFTER
+  // the two tiles traded places, so the bomb is wherever it now sits and its
+  // partner is the tile on the other swapped cell. The blast is the bomb's own
+  // cell plus every tile of the monster it was swapped with (a bomb's colour is
+  // the monster it takes out), and it is chained through so a special caught by
+  // it fires too — one bomb may hand its colour to the next.
+  // No colour bomb on either side means nothing: null comes back and the swap
+  // stays a plain swap that must make a match to be legal. Cells missing from
+  // the board are not a swap that ever happened, so they are refused the same
+  // way instead of clearing half a blast.
+  function bombSwapBlast(board, a, b){
+    if (!board || !a || !b) return null;
+    const ka = hexKey(a.q, a.r), kb = hexKey(b.q, b.r);
+    if (!(ka in board) || !(kb in board)) return null;
+    const atA = board[ka], atB = board[kb];
+    const bombA = specialOf(atA) === 'bomb';
+    const bombB = specialOf(atB) === 'bomb';
+    if (!bombA && !bombB) return null;
+    const blast = new Set();
+    if (bombA){ // the bomb sits at a, swapped with whatever now stands at b
+      blast.add(ka);
+      specialTargets(board, ka, baseType(atB)).forEach(key => blast.add(key));
+    }
+    if (bombB){ // the bomb sits at b, swapped with whatever now stands at a
+      blast.add(kb);
+      specialTargets(board, kb, baseType(atA)).forEach(key => blast.add(key));
+    }
+    const swapType = bombA ? baseType(atB) : baseType(atA);
+    return chainSpecials(board, blast, swapType);
+  }
+  api.bombSwapBlast = bombSwapBlast;
+  /* === END TASK SECTION ml-42 === */
+
   return api;
 });
