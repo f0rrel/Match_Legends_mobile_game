@@ -654,5 +654,41 @@
   api.specialTargets = specialTargets;
   /* === END TASK SECTION ml-37 === */
 
+  /* === TASK SECTION ml-38 special-chain (add task code and api.* exports here) === */
+  // Every cell a set of blasts ends up clearing: any special caught by the set
+  // fires too, and whatever its blast catches may hold another special, and so
+  // on until nothing new turns up. The input Set and the board are both left
+  // exactly as they were — the caller owns them, we only read.
+  // Specials fire in sorted-key order so the chain (and therefore the result)
+  // never depends on Set iteration order, and each one fires exactly once even
+  // if several blasts cover it.
+  function chainSpecials(board, targets, swapType){
+    const result = (targets && typeof targets[Symbol.iterator] === 'function')
+      ? new Set(targets)
+      : new Set();
+    const fired = new Set();
+    for (;;){
+      // Anything new still sitting in the result that can actually fire.
+      const pending = [];
+      for (const key of result){
+        if (fired.has(key)) continue;
+        if (!board || typeof key !== 'string' || !(key in board) || specialOf(board[key]) === null){
+          fired.add(key); // not a special (or not a cell): it will never fire
+          continue;
+        }
+        pending.push(key);
+      }
+      if (pending.length === 0) break;
+      pending.sort();
+      for (const key of pending){
+        fired.add(key);
+        for (const k of specialTargets(board, key, swapType)) result.add(k);
+      }
+    }
+    return result;
+  }
+  api.chainSpecials = chainSpecials;
+  /* === END TASK SECTION ml-38 === */
+
   return api;
 });
