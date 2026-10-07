@@ -1,11 +1,11 @@
 // Shared helpers for the logic tests: hand-built boards and a deterministic rng.
 const ML = require('../../www/js/match-logic.js');
 
-// (q + 2r) mod 6 over the six tile types: no matches and no legal move anywhere.
+// (col + 2*row) mod 6 over the six tile types: no matches and no legal move anywhere.
 function stuckBoard() {
   const board = {};
-  ML.HEX_CELLS.forEach(c => {
-    board[ML.hexKey(c.q, c.r)] = ML.TYPES[(((c.q + 2 * c.r) % 6) + 6) % 6];
+  ML.CELLS.forEach(c => {
+    board[ML.cellKey(c.col, c.row)] = ML.TYPES[(((c.col + 2 * c.row) % 6) + 6) % 6];
   });
   return board;
 }

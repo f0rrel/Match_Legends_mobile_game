@@ -1,6 +1,6 @@
 /* =========================================================
    MATCH LEGENDS — PURE GAME LOGIC
-   Hex grid, matching, gravity and power targeting. No DOM, no audio,
+   Square grid, matching, gravity and power targeting. No DOM, no audio,
    no timers: everything here is a plain function of its arguments, so
    it runs both in the game (window.MatchLogic) and under Node's test
    runner (module.exports). No bundler; a classic script.
@@ -8,14 +8,14 @@
    Randomness: every function that needs it takes an optional `rng`
    (a function returning a float in [0, 1)), defaulting to Math.random.
 
-   HEX GRID GEOMETRY
-   Axial coordinates (q,r), pointy-top hexagons. Board is a
-   "hex of hexes" of radius HEX_RADIUS. A hex has 3 straight-
-   line axes (q constant, r constant, s=-q-r constant) instead
-   of a square grid's 2 (rows/cols) — matches run along any of
-   the 6 directions those 3 axes cover.
-   Reference: redblobgames.com/grids/hexagons
-========================================================= */
+   SQUARE GRID GEOMETRY
+   Cells are keyed by (col, row): col runs 0..COLS-1 left to right,
+   row runs 0..ROWS-1 top to bottom. Gravity pulls tiles toward larger
+   row (down-screen) and new tiles fall in from the top. A neighbour is
+   one step up, down, left or right; a match is 3+ of the same monster
+   in a straight row or column, and an L/T (a row run crossing a column
+   run) counts as one match.
+======================================================== */
 (function (root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -24,53 +24,59 @@
   'use strict';
 
   const TYPES = ['sword', 'shield', 'urn', 'crown', 'flame', 'gem'];
-  const HEX_RADIUS = 4; // hex-of-hexes board, 3R²+3R+1 = 61 cells
+  const COLS = 8;
+  const ROWS = 9; // 8 x 9 = 72 cells, a portrait-phone board
   const BASE_POINTS = 20;
 
-  function hexKey(q,r){ return q+','+r; }
-  function buildHexCells(R){
+  function cellKey(col,row){ return col+','+row; }
+  function buildCells(){
     const cells = [];
-    for (let q=-R; q<=R; q++){
-      const r1 = Math.max(-R, -q-R);
-      const r2 = Math.min(R, -q+R);
-      for (let r=r1; r<=r2; r++) cells.push({q,r});
-    }
+    for (let row=0; row<ROWS; row++)
+      for (let col=0; col<COLS; col++) cells.push({ col, row });
     return cells;
   }
-  const HEX_CELLS = buildHexCells(HEX_RADIUS);
+  const CELLS = buildCells();
 
-  // Per-q column extents, used for gravity (tiles fall toward larger r).
-  const QCOLUMNS = [];
-  const QCOLUMNS_BY_Q = {};
-  for (let q=-HEX_RADIUS; q<=HEX_RADIUS; q++){
-    const rMin = Math.max(-HEX_RADIUS, -q-HEX_RADIUS);
-    const rMax = Math.min(HEX_RADIUS, -q+HEX_RADIUS);
-    const entry = { q, rMin, rMax };
-    QCOLUMNS.push(entry);
-    QCOLUMNS_BY_Q[q] = entry;
+  // Per-column extents, used for gravity (tiles fall toward larger row).
+  const COLUMNS = [];
+  const COLUMNS_BY_COL = {};
+  for (let col=0; col<COLS; col++){
+    const entry = { col, rowMin:0, rowMax:ROWS-1 };
+    COLUMNS.push(entry);
+    COLUMNS_BY_COL[col] = entry;
   }
 
-  // Group every cell into its 3 axis-lines once (board shape is static).
-  const HEX_LINE_GROUPS = { q:[], r:[], s:[] };
-  (function buildHexLines(){
-    const byQ = {}, byR = {}, byS = {};
-    HEX_CELLS.forEach(c=>{
-      const s = -c.q-c.r;
-      (byQ[c.q] = byQ[c.q]||[]).push(c);
-      (byR[c.r] = byR[c.r]||[]).push(c);
-      (byS[s] = byS[s]||[]).push(c);
-    });
-    Object.values(byQ).forEach(arr=>{ arr.sort((a,b)=>a.r-b.r); HEX_LINE_GROUPS.q.push(arr); });
-    Object.values(byR).forEach(arr=>{ arr.sort((a,b)=>a.q-b.q); HEX_LINE_GROUPS.r.push(arr); });
-    Object.values(byS).forEach(arr=>{ arr.sort((a,b)=>a.q-b.q); HEX_LINE_GROUPS.s.push(arr); });
-  })();
-  const HEX_ALL_LINES = [...HEX_LINE_GROUPS.q, ...HEX_LINE_GROUPS.r, ...HEX_LINE_GROUPS.s];
+  // Every cell grouped into the two straight-line axes once (board shape is static).
+  const ROW_LINES = [];
+  for (let row=0; row<ROWS; row++){
+    const line = [];
+    for (let col=0; col<COLS; col++) line.push({ col, row });
+    ROW_LINES.push(line);
+  }
+  const COL_LINES = [];
+  for (let col=0; col<COLS; col++){
+    const line = [];
+    for (let row=0; row<ROWS; row++) line.push({ col, row });
+    COL_LINES.push(line);
+  }
+  const ALL_LINES = [...ROW_LINES, ...COL_LINES];
 
-  const HEX_DIRS = [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
-  const HEX_CHECK_DIRS = [[1,0],[0,1],[1,-1]]; // covers every board edge exactly once
-  function hexNeighbors(q,r){ return HEX_DIRS.map(([dq,dr])=>({q:q+dq,r:r+dr})); }
-  function isHexAdjacent(a,b){ return HEX_DIRS.some(([dq,dr])=> a.q+dq===b.q && a.r+dr===b.r); }
-  function swapHex(board,a,b){ const ka=hexKey(a.q,a.r), kb=hexKey(b.q,b.r); const t=board[ka]; board[ka]=board[kb]; board[kb]=t; }
+  // Orthogonal neighbours only: up, down, left, right.
+  const CELL_DIRS = [[0,-1],[0,1],[-1,0],[1,0]];
+  const CELL_CHECK_DIRS = [[1,0],[0,1]]; // covers every board edge exactly once
+  function cellNeighbors(col,row){ return CELL_DIRS.map(([dc,dr])=>({ col:col+dc, row:row+dr })); }
+  function isCellAdjacent(a,b){ return CELL_DIRS.some(([dc,dr])=> a.col+dc===b.col && a.row+dr===b.row); }
+  function swapCells(board,a,b){ const ka=cellKey(a.col,a.row), kb=cellKey(b.col,b.row); const t=board[ka]; board[ka]=board[kb]; board[kb]=t; }
+
+  // Internal: a board key ('col,row') as a cell, or null when it cannot be placed.
+  function parseCellKey(key){
+    if (typeof key !== 'string') return null;
+    const parts = key.split(',');
+    if (parts.length !== 2) return null;
+    if (!/^[+-]?\d+$/.test(parts[0]) || !/^[+-]?\d+$/.test(parts[1])) return null;
+    return { col:+parts[0], row:+parts[1] };
+  }
+  const inBounds = (col,row)=> col>=0 && col<COLS && row>=0 && row<ROWS;
 
   /* =========================================================
      BOARD LOGIC
@@ -79,7 +85,7 @@
   function randType(rng = Math.random){ return pick(TYPES, rng); }
   function createBoard(rng = Math.random){
     const board = {};
-    HEX_CELLS.forEach(c=> board[hexKey(c.q,c.r)] = randType(rng));
+    CELLS.forEach(c=> board[cellKey(c.col,c.row)] = randType(rng));
     // Random fill can seed matches; repair by re-rolling only the offending cells until clean.
     let matched = findMatches(board);
     let guard = 0;
@@ -93,15 +99,15 @@
   function findMatches(board){
     const matched = new Set();
     const runLen = {}; // cell key -> longest straight run (3,4,5+) it belongs to, for scoring bonuses
-    HEX_ALL_LINES.forEach(line=>{
+    ALL_LINES.forEach(line=>{
       let start = 0;
       for (let i=1;i<=line.length;i++){
-        const startKey = hexKey(line[start].q, line[start].r);
-        const curKey = i<line.length ? hexKey(line[i].q, line[i].r) : null;
+        const startKey = cellKey(line[start].col, line[start].row);
+        const curKey = i<line.length ? cellKey(line[i].col, line[i].row) : null;
         if (curKey && baseType(board[curKey])===baseType(board[startKey])) continue;
         const len = i-start;
         if (len>=3) for (let k=start;k<i;k++){
-          const kk = hexKey(line[k].q, line[k].r);
+          const kk = cellKey(line[k].col, line[k].row);
           matched.add(kk); runLen[kk]=Math.max(runLen[kk]||0,len);
         }
         start = i;
@@ -118,13 +124,13 @@
     return matched;
   }
   function hasPossibleMove(board){
-    for (const c of HEX_CELLS){
-      for (const [dq,dr] of HEX_CHECK_DIRS){
-        const n = { q:c.q+dq, r:c.r+dr };
-        if (!(hexKey(n.q,n.r) in board)) continue;
-        swapHex(board, c, n);
+    for (const c of CELLS){
+      for (const [dc,dr] of CELL_CHECK_DIRS){
+        const n = { col:c.col+dc, row:c.row+dr };
+        if (!(cellKey(n.col,n.row) in board)) continue;
+        swapCells(board, c, n);
         const m = findMatches(board);
-        swapHex(board, c, n);
+        swapCells(board, c, n);
         if (m.size>0) return true;
       }
     }
@@ -136,26 +142,26 @@
     do { board = createBoard(rng); guard++; } while (!hasPossibleMove(board) && guard < 30);
     return board;
   }
-  // Returns collapse plan: for each q-column, list of {q, fromR(or null if new), toR, type}.
-  // Gravity pulls toward larger r (down-screen); new tiles spawn at the column's rMin end.
+  // Returns collapse plan: for each column, list of {col, fromRow(or null if new), toRow, type}.
+  // Gravity pulls toward larger row (down-screen); new tiles spawn at the column's row 0 end.
   function computeCollapse(board, matchedSet, rng = Math.random){
     const plan = [];
-    QCOLUMNS.forEach(({q, rMin, rMax})=>{
+    COLUMNS.forEach(({col, rowMin, rowMax})=>{
       const survivors = [];
-      for (let r=rMin; r<=rMax; r++){
-        const key = hexKey(q,r);
-        if (!matchedSet.has(key)) survivors.push({ fromR:r, type:board[key] });
+      for (let row=rowMin; row<=rowMax; row++){
+        const key = cellKey(col,row);
+        if (!matchedSet.has(key)) survivors.push({ fromRow:row, type:board[key] });
       }
-      const total = rMax-rMin+1;
+      const total = rowMax-rowMin+1;
       const newCount = total - survivors.length;
       const newTiles = [];
-      for (let i=0;i<newCount;i++) newTiles.push({ fromR:null, type:randType(rng) });
+      for (let i=0;i<newCount;i++) newTiles.push({ fromRow:null, type:randType(rng) });
       const finalCol = newTiles.concat(survivors);
       for (let i=0;i<total;i++){
-        const r = rMin+i;
+        const row = rowMin+i;
         const item = finalCol[i];
-        plan.push({ q, toR:r, fromR:item.fromR, type:item.type });
-        board[hexKey(q,r)] = item.type;
+        plan.push({ col, toRow:row, fromRow:item.fromRow, type:item.type });
+        board[cellKey(col,row)] = item.type;
       }
     });
     return plan;
@@ -165,28 +171,29 @@
      POWER TARGETING (which cells a power clears)
      The game applies the side effects (buffs, gems, moves, UI).
   ========================================================= */
-  // clearRow: a full q-axis line. clearColumn: a full r-axis line.
+  // lineTargets: one full row ('row') or one full column ('col'), chosen at random.
   function lineTargets(axis, rng = Math.random){
-    const line = pick(HEX_LINE_GROUPS[axis], rng);
-    return new Set(line.map(c=> hexKey(c.q,c.r)));
+    const lines = axis === 'col' ? COL_LINES : ROW_LINES;
+    const line = pick(lines, rng);
+    return new Set(line.map(c=> cellKey(c.col,c.row)));
   }
-  // clearArea: a center hex + its 6 neighbors, then chain lightning: same-type
-  // neighbors just outside the blast are zapped, twice over.
+  // clearArea: a center cell + its 4 neighbours, then chain lightning: same-type
+  // neighbours just outside the blast are zapped, twice over.
   function areaTargets(board, rng = Math.random){
     const matched = new Set();
-    const center = pick(HEX_CELLS, rng);
-    matched.add(hexKey(center.q,center.r));
-    hexNeighbors(center.q,center.r).forEach(n=>{
-      const nk = hexKey(n.q,n.r);
+    const center = pick(CELLS, rng);
+    matched.add(cellKey(center.col,center.row));
+    cellNeighbors(center.col,center.row).forEach(n=>{
+      const nk = cellKey(n.col,n.row);
       if (nk in board) matched.add(nk);
     });
     for (let pass=0; pass<2; pass++){
       const additions = [];
       matched.forEach(key=>{
-        const [q,r] = key.split(',').map(Number);
+        const [col,row] = key.split(',').map(Number);
         const t = board[key];
-        hexNeighbors(q,r).forEach(n=>{
-          const nk = hexKey(n.q,n.r);
+        cellNeighbors(col,row).forEach(n=>{
+          const nk = cellKey(n.col,n.row);
           if ((nk in board) && !matched.has(nk) && board[nk]===t) additions.push(nk);
         });
       });
@@ -221,10 +228,10 @@
   }
 
   const api = {
-    TYPES, HEX_RADIUS, BASE_POINTS,
-    hexKey, buildHexCells, HEX_CELLS, QCOLUMNS, QCOLUMNS_BY_Q,
-    HEX_LINE_GROUPS, HEX_ALL_LINES, HEX_DIRS, HEX_CHECK_DIRS,
-    hexNeighbors, isHexAdjacent, swapHex,
+    TYPES, COLS, ROWS, BASE_POINTS,
+    cellKey, buildCells, CELLS, COLUMNS, COLUMNS_BY_COL,
+    ROW_LINES, COL_LINES, ALL_LINES, CELL_DIRS, CELL_CHECK_DIRS,
+    cellNeighbors, isCellAdjacent, swapCells,
     randType, createBoard, findMatches, hasPossibleMove, createPlayableBoard, computeCollapse,
     lineTargets, areaTargets, typeTargets, convertTiles,
   };
@@ -325,17 +332,17 @@
 
   /* === TASK SECTION ml-4 hint (add task code and api.* exports here) === */
   // A swap worth suggesting: two adjacent cells whose exchange makes a match.
-  // Returns { a:{q,r}, b:{q,r} } or null when the board has no legal move.
+  // Returns { a:{col,row}, b:{col,row} } or null when the board has no legal move.
   // The board is left exactly as it was found (each trial swap is undone).
   function findHint(board){
-    for (const c of HEX_CELLS){
-      for (const [dq,dr] of HEX_CHECK_DIRS){
-        const n = { q:c.q+dq, r:c.r+dr };
-        if (!(hexKey(n.q,n.r) in board)) continue;
-        swapHex(board, c, n);
+    for (const c of CELLS){
+      for (const [dc,dr] of CELL_CHECK_DIRS){
+        const n = { col:c.col+dc, row:c.row+dr };
+        if (!(cellKey(n.col,n.row) in board)) continue;
+        swapCells(board, c, n);
         const makesMatch = findMatches(board).size > 0;
-        swapHex(board, c, n); // undo the trial, board untouched
-        if (makesMatch) return { a:{q:c.q, r:c.r}, b:{q:n.q, r:n.r} };
+        swapCells(board, c, n); // undo the trial, board untouched
+        if (makesMatch) return { a:{col:c.col, row:c.row}, b:{col:n.col, row:n.row} };
       }
     }
     return null;
@@ -382,10 +389,12 @@
   /* === END TASK SECTION ml-22 === */
 
   /* === TASK SECTION ml-33 special-tiles (add task code and api.* exports here) === */
-  // A special tile is stored as `monster + '+' + kind` ('sword+line'): the
+  // A special tile is stored as `monster + '+' + kind` ('sword+line-h'): the
   // monster half decides what it matches with, the kind half decides what it
-  // does when it fires. Plain tiles carry only the monster, so encoding and
-  // matching share one separator without ambiguity.
+  // does when it fires. A line blaster carries its direction in the kind
+  // ('line-h' clears a row, 'line-v' a column); a bomb is just 'bomb'. Plain
+  // tiles carry only the monster, so encoding and matching share one separator
+  // without ambiguity.
   function makeSpecial(type, kind){ return type + '+' + kind; }
   function baseType(tile){
     const i = typeof tile === 'string' ? tile.indexOf('+') : -1;
@@ -403,171 +412,149 @@
 
   /* === TASK SECTION ml-34 match-shape (add task code and api.* exports here) === */
   // Which special a match leaves behind, read from the matched set alone. A
-  // cell's axial coordinates say everything needed: with q, r and s=-q-r you
-  // know which of the three straight-line axes the cell sits on, so the longest
-  // unbroken run of matched cells along any axis needs no board. A run of 5 or
-  // more leaves a bomb, a run of exactly 4 leaves a line, and a plain 3-match
-  // leaves nothing (an L or T of two 3-runs is not a straight run either).
-  // Along a q line r walks by 1, along an r line q walks by 1, and along an s
-  // line q walks by 1 too (r steps with it) — one fixed coordinate plus one
-  // stepping coordinate covers each axis.
-  const MATCH_SHAPE_AXES = Object.freeze([
-    Object.freeze({ fixed: c => c.q, step: c => c.r }),
-    Object.freeze({ fixed: c => c.r, step: c => c.q }),
-    Object.freeze({ fixed: c => c.s, step: c => c.q }),
-  ]);
-  // Match keys are hexKey output ('q,r'); anything else cannot place a cell, so
-  // it is skipped rather than guessed at. Malformed sets end up with no cells.
+  // cell's (col,row) says everything needed: group matched cells into the two
+  // straight-line axes and walk each group in order, so the longest unbroken
+  // run of matched cells along a row or column needs no board. A run of 5 or
+  // more leaves a bomb, a run of exactly 4 leaves a line blaster (horizontal or
+  // vertical, from the axis the run lies on), and a plain 3-match leaves
+  // nothing. An L or T -- a row run and a column run of 3+ sharing a tile --
+  // counts as one match and leaves a bomb too.
   function matchShapeCells(matched){
     const cells = [];
+    if (!matched || typeof matched[Symbol.iterator] !== 'function') return cells;
     for (const key of matched){
-      if (typeof key !== 'string') continue;
-      const parts = key.split(',');
-      if (parts.length !== 2) continue;
-      if (!/^[+-]?\d+$/.test(parts[0]) || !/^[+-]?\d+$/.test(parts[1])) continue;
-      const q = +parts[0], r = +parts[1];
-      cells.push({ q, r, s: -q - r });
+      const cell = parseCellKey(key);
+      if (cell) cells.push(cell);
     }
     return cells;
   }
-  // Longest run of consecutive cells on any one axis line. Cells of one line
-  // are grouped by their fixed coordinate and sorted by the stepping one; a
-  // gap in the stepping coordinate breaks the run, so two 3-runs separated by
-  // an unmatched cell never add up to a 6.
-  function longestStraightRun(cells){
-    let best = 0;
-    for (const axis of MATCH_SHAPE_AXES){
-      const lines = new Map();
-      for (const c of cells){
-        const id = axis.fixed(c);
-        if (!lines.has(id)) lines.set(id, []);
-        lines.get(id).push(c);
-      }
-      for (const line of lines.values()){
-        line.sort((a, b) => axis.step(a) - axis.step(b));
-        let run = 0, prev = null;
-        for (const c of line){
-          const at = axis.step(c);
-          run = (prev !== null && at === prev + 1) ? run + 1 : 1;
-          if (run > best) best = run;
-          prev = at;
-        }
-      }
+  // Every maximal run of consecutive matched cells along one axis. Cells of a
+  // line are grouped by their fixed coordinate and sorted by the stepping one;
+  // a gap in the stepping coordinate breaks the run.
+  function axisSegments(cells, fixedKey, stepKey){
+    const groups = new Map();
+    for (const c of cells){
+      const id = c[fixedKey];
+      if (!groups.has(id)) groups.set(id, []);
+      groups.get(id).push(c);
     }
-    return best;
+    const segments = [];
+    for (const line of groups.values()){
+      line.sort((a,b)=> a[stepKey]-b[stepKey]);
+      let run = [line[0]];
+      for (let i=1;i<line.length;i++){
+        if (line[i][stepKey] === line[i-1][stepKey] + 1) run.push(line[i]);
+        else { segments.push(run); run = [line[i]]; }
+      }
+      segments.push(run);
+    }
+    return segments;
   }
   function matchShape(matched){
-    if (!matched || typeof matched[Symbol.iterator] !== 'function') return null;
     const cells = matchShapeCells(matched);
     if (cells.length === 0) return null; // empty or unusable match leaves nothing
-    const run = longestStraightRun(cells);
-    if (run >= 5) return 'bomb';
-    if (run === 4) return 'line';
+    const rowSegs = axisSegments(cells, 'row', 'col');
+    const colSegs = axisSegments(cells, 'col', 'row');
+    let maxRun = 0, rowFour = false, colFour = false;
+    const longRows = new Set(), longCols = new Set();
+    for (const seg of rowSegs){
+      if (seg.length > maxRun) maxRun = seg.length;
+      if (seg.length === 4) rowFour = true;
+      if (seg.length >= 3) seg.forEach(c=> longRows.add(cellKey(c.col,c.row)));
+    }
+    for (const seg of colSegs){
+      if (seg.length > maxRun) maxRun = seg.length;
+      if (seg.length === 4) colFour = true;
+      if (seg.length >= 3) seg.forEach(c=> longCols.add(cellKey(c.col,c.row)));
+    }
+    // L/T: a row run and a column run of 3+ sharing a tile.
+    let isLT = false;
+    for (const k of longRows){ if (longCols.has(k)){ isLT = true; break; } }
+    if (maxRun >= 5 || isLT) return 'bomb';
+    if (maxRun === 4) return rowFour ? 'line-h' : 'line-v';
     return null;
   }
   api.matchShape = matchShape;
   /* === END TASK SECTION ml-34 === */
 
   /* === TASK SECTION ml-35 special-anchor (add task code and api.* exports here) === */
-  function hexKeyCell(c){ return hexKey(c.q, c.r); }
+  function cellKeyCell(c){ return cellKey(c.col, c.row); }
 
   function specialAnchor(board, matched, a, b){
     // Check if played cells are in the match
-    const aKey = hexKey(a.q, a.r);
-    const bKey = hexKey(b.q, b.r);
-    if (matched && matched.has && matched.has(aKey)) return { q: a.q, r: a.r };
-    if (matched && matched.has && matched.has(bKey)) return { q: b.q, r: b.r };
+    const aKey = a && Number.isInteger(a.col) ? cellKey(a.col, a.row) : null;
+    const bKey = b && Number.isInteger(b.col) ? cellKey(b.col, b.row) : null;
+    if (matched && matched.has && aKey && matched.has(aKey)) return { col: a.col, row: a.row };
+    if (matched && matched.has && bKey && matched.has(bKey)) return { col: b.col, row: b.row };
 
     // Find all cells in the matched set with their coordinates and types
     const cells = [];
     if (matched && typeof matched[Symbol.iterator] === 'function'){
       for (const key of matched){
-        if (typeof key !== 'string') continue;
-        const parts = key.split(',');
-        if (parts.length !== 2) continue;
-        if (!/^[+-]?\d+$/.test(parts[0]) || !/^[+-]?\d+$/.test(parts[1])) continue;
-        const q = +parts[0], r = +parts[1];
+        const cell = parseCellKey(key);
+        if (!cell) continue;
         if (!(key in board)) continue; // ensure it's a real board cell
-        cells.push({ q, r, s: -q - r, key, type: baseType(board[key]) });
+        cells.push({ col: cell.col, row: cell.row, key, type: baseType(board[key]) });
       }
     }
     if (cells.length === 0) {
-      // Fallback: if nothing found, just pick any matched cell? But task says never return non-matched
-      // Try to construct from matched keys
-      for (const key of matched || []){
-        if (typeof key === 'string' && key.includes(',')){
-          const [q,r] = key.split(',').map(Number);
-          return { q, r };
-        }
-      }
-      return { q: a.q, r: a.r };
+      const first = matched && typeof matched[Symbol.iterator] === 'function' ? [...matched][0] : null;
+      const cell = parseCellKey(first);
+      if (cell) return cell;
+      return { col: a.col, row: a.row };
     }
 
-    // Find all straight runs (contiguous along axis, same monster type)
+    // Find all straight runs (contiguous along an axis, same monster type)
     const runs = [];
-    // Try each axis
     const axes = [
-      { fixed: c => c.q, step: c => c.r },
-      { fixed: c => c.r, step: c => c.q },
-      { fixed: c => c.s, step: c => c.q },
+      { fixed: 'row', step: 'col' },
+      { fixed: 'col', step: 'row' },
     ];
     for (const axis of axes){
       const lines = new Map();
       for (const c of cells){
-        const id = axis.fixed(c);
+        const id = c[axis.fixed];
         if (!lines.has(id)) lines.set(id, []);
         lines.get(id).push(c);
       }
       for (const line of lines.values()){
         line.sort((x,y) => {
-          const sx = axis.step(x), sy = axis.step(y);
+          const sx = x[axis.step], sy = y[axis.step];
           if (sx !== sy) return sx - sy;
           return x.key.localeCompare(y.key);
         });
         let i = 0;
         while (i < line.length){
           let j = i;
-          // Find contiguous sequence with same type starting from i
           while (j + 1 < line.length){
             const cur = line[j];
             const next = line[j+1];
             const sameType = cur.type === next.type;
-            const contiguous = axis.step(next) === axis.step(cur) + 1;
+            const contiguous = next[axis.step] === cur[axis.step] + 1;
             if (sameType && contiguous) j++;
             else break;
           }
-          // Sequence from i to j is a run
           const runCells = line.slice(i, j+1);
-          if (runCells.length >= 1){ // runs in matched are >=3 typically, but be general
-            runs.push(runCells);
-          }
+          if (runCells.length >= 1) runs.push(runCells);
           i = j + 1;
         }
       }
     }
 
     if (runs.length === 0){
-      // If no runs found, pick the cell with smallest hexKey among matched
       const best = cells.slice().sort((x,y) => x.key.localeCompare(y.key))[0];
-      return { q: best.q, r: best.r };
+      return { col: best.col, row: best.row };
     }
 
-    // Find longest run; tie-breaker: the one containing the smallest hexKey
+    // Find longest run; tie-breaker: the one containing the smallest key
     let bestRun = runs[0];
     for (let k = 1; k < runs.length; k++){
       const run = runs[k];
-      if (run.length > bestRun.length){
-        bestRun = run;
-        continue;
-      }
+      if (run.length > bestRun.length){ bestRun = run; continue; }
       if (run.length === bestRun.length){
-        // tie-breaker: smallest hexKey in the run? or the run containing smallest hexKey
-        // "take the one containing the smallest hexKey" - find min key in each run
         const minBest = bestRun.reduce((m, c) => c.key < m ? c.key : m, bestRun[0].key);
         const minRun = run.reduce((m, c) => c.key < m ? c.key : m, run[0].key);
-        if (minRun < minBest){
-          bestRun = run;
-        }
+        if (minRun < minBest) bestRun = run;
       }
     }
 
@@ -575,7 +562,7 @@
     const n = bestRun.length;
     const idx = Math.floor((n - 1) / 2);
     const mid = bestRun[idx];
-    return { q: mid.q, r: mid.r };
+    return { col: mid.col, row: mid.row };
   }
   api.specialAnchor = specialAnchor;
   /* === END TASK SECTION ml-35 === */
@@ -586,7 +573,7 @@
   // appended with the same '+' separator the rest of the game uses.
   // Nothing is planted on an empty cell or for a kind we cannot fire — the
   // board is left untouched and null comes back so callers can reject it.
-  const PLANT_KINDS = ['line', 'bomb'];
+  const PLANT_KINDS = ['line-h', 'line-v', 'bomb'];
   function plantSpecial(board, key, kind){
     if (!board || typeof key !== 'string' || PLANT_KINDS.indexOf(kind) === -1) return null;
     if (!(key in board)) return null;
@@ -604,31 +591,44 @@
   /* === TASK SECTION ml-37 special-blasts (add task code and api.* exports here) === */
   // What a special clears when it fires. Every function here is read-only:
   // the board is only ever looked at, never written to.
-  // Index the pre-built q lines once by their constant coordinate, so a line
-  // blast is a lookup instead of a scan (the lines themselves are reused, not
-  // rebuilt).
-  const Q_LINES_BY_Q = new Map();
-  HEX_LINE_GROUPS.q.forEach(line => {
-    if (line.length) Q_LINES_BY_Q.set(line[0].q, line);
-  });
 
-  // Every board cell on the same q-line (constant q) as `key`, the cell itself
-  // included. A key outside the board has no line and clears nothing.
-  function lineBlast(board, key){
+  // Every board cell on the same row (constant row) as `key`, the cell itself
+  // included. A key outside the board has no row and clears nothing.
+  function rowBlast(board, key){
     const blast = new Set();
-    if (typeof key !== 'string') return blast;
-    const parts = key.split(',');
-    if (parts.length !== 2 || !/^[+-]?\d+$/.test(parts[0])) return blast;
-    const line = Q_LINES_BY_Q.get(+parts[0]);
-    if (!line) return blast;
-    for (const c of line){
-      const k = hexKey(c.q, c.r);
+    const cell = parseCellKey(key);
+    if (!cell) return blast;
+    for (let col=0; col<COLS; col++){
+      const k = cellKey(col, cell.row);
       if (!board || k in board) blast.add(k);
     }
     return blast;
   }
 
-  // Every cell whose tile is that monster, specials included: 'gem+line' is
+  // The column counterpart of rowBlast: every cell on the same column.
+  function colBlast(board, key){
+    const blast = new Set();
+    const cell = parseCellKey(key);
+    if (!cell) return blast;
+    for (let row=0; row<ROWS; row++){
+      const k = cellKey(cell.col, row);
+      if (!board || k in board) blast.add(k);
+    }
+    return blast;
+  }
+
+  // A line blaster clears its whole row ('line-h') or column ('line-v'); the
+  // direction is read from the tile on the key. A plain tile clears nothing.
+  function lineBlast(board, key){
+    const blast = new Set();
+    if (!board || typeof key !== 'string' || !(key in board)) return blast;
+    const kind = specialOf(board[key]);
+    if (kind === 'line-h') return rowBlast(board, key);
+    if (kind === 'line-v') return colBlast(board, key);
+    return blast;
+  }
+
+  // Every cell whose tile is that monster, specials included: 'gem+line-h' is
   // still a gem as far as a colour bomb is concerned.
   function cellsOfType(board, type){
     const found = new Set();
@@ -637,19 +637,38 @@
     return found;
   }
 
-  // The cells the special sitting at `key` clears: a line blaster takes its
-  // whole q-line, a colour bomb takes every tile of `swapType` (the monster it
-  // was swapped with) and falls back to its own monster when there is none,
-  // and a plain tile clears nothing on its own.
+  // The 3x3 area around a bomb, the bomb itself included, clipped to the board.
+  function bombBlast(board, key){
+    const blast = new Set();
+    const cell = parseCellKey(key);
+    if (!cell) return blast;
+    for (let dc=-1; dc<=1; dc++){
+      for (let dr=-1; dr<=1; dr++){
+        const col = cell.col+dc, row = cell.row+dr;
+        if (!inBounds(col,row)) continue;
+        const k = cellKey(col,row);
+        if (!board || k in board) blast.add(k);
+      }
+    }
+    return blast;
+  }
+
+  // The cells the special sitting at `key` clears when it goes off: a line
+  // blaster takes its whole row or column, a bomb takes the 3x3 around it, and
+  // a plain tile clears nothing on its own.
   function specialTargets(board, key, swapType){
     if (!board || typeof key !== 'string' || !(key in board)) return new Set();
     const kind = specialOf(board[key]);
-    if (kind === 'line') return lineBlast(board, key);
-    if (kind === 'bomb') return cellsOfType(board, swapType || baseType(board[key]));
+    if (kind === 'line-h') return rowBlast(board, key);
+    if (kind === 'line-v') return colBlast(board, key);
+    if (kind === 'bomb') return bombBlast(board, key);
     return new Set();
   }
 
+  api.rowBlast = rowBlast;
+  api.colBlast = colBlast;
   api.lineBlast = lineBlast;
+  api.bombBlast = bombBlast;
   api.cellsOfType = cellsOfType;
   api.specialTargets = specialTargets;
   /* === END TASK SECTION ml-37 === */
@@ -662,11 +681,11 @@
   // Specials fire in sorted-key order so the chain (and therefore the result)
   // never depends on Set iteration order, and each one fires exactly once even
   // if several blasts cover it.
-  function chainSpecials(board, targets, swapType){
+  function chainSpecials(board, targets, swapType, alreadyFired){
     const result = (targets && typeof targets[Symbol.iterator] === 'function')
       ? new Set(targets)
       : new Set();
-    const fired = new Set();
+    const fired = new Set(alreadyFired && typeof alreadyFired[Symbol.iterator] === 'function' ? alreadyFired : []);
     for (;;){
       // Anything new still sitting in the result that can actually fire.
       const pending = [];
@@ -693,33 +712,37 @@
   /* === TASK SECTION ml-42 colour-bomb-swap (add task code and api.* exports here) === */
   // What a swap with a colour bomb on one side clears. The board is read AFTER
   // the two tiles traded places, so the bomb is wherever it now sits and its
-  // partner is the tile on the other swapped cell. The blast is the bomb's own
-  // cell plus every tile of the monster it was swapped with (a bomb's colour is
-  // the monster it takes out), and it is chained through so a special caught by
-  // it fires too — one bomb may hand its colour to the next.
+  // partner is the tile on the other swapped cell. A bomb swapped with a plain
+  // tile clears every tile of the partner's monster, chained through so a
+  // special caught by it fires too — one bomb may hand its colour to the next.
   // No colour bomb on either side means nothing: null comes back and the swap
   // stays a plain swap that must make a match to be legal. Cells missing from
   // the board are not a swap that ever happened, so they are refused the same
   // way instead of clearing half a blast.
   function bombSwapBlast(board, a, b){
     if (!board || !a || !b) return null;
-    const ka = hexKey(a.q, a.r), kb = hexKey(b.q, b.r);
+    const ka = cellKey(a.col, a.row), kb = cellKey(b.col, b.row);
     if (!(ka in board) || !(kb in board)) return null;
     const atA = board[ka], atB = board[kb];
     const bombA = specialOf(atA) === 'bomb';
     const bombB = specialOf(atB) === 'bomb';
     if (!bombA && !bombB) return null;
     const blast = new Set();
+    // The bombs that were swapped are cleared, but they have already paid for
+    // themselves as colour bombs -- they must not fire again as 3x3 blasts.
+    const alreadyFired = new Set();
     if (bombA){ // the bomb sits at a, swapped with whatever now stands at b
       blast.add(ka);
-      specialTargets(board, ka, baseType(atB)).forEach(key => blast.add(key));
+      alreadyFired.add(ka);
+      cellsOfType(board, baseType(atB)).forEach(key => blast.add(key));
     }
     if (bombB){ // the bomb sits at b, swapped with whatever now stands at a
       blast.add(kb);
-      specialTargets(board, kb, baseType(atA)).forEach(key => blast.add(key));
+      alreadyFired.add(kb);
+      cellsOfType(board, baseType(atA)).forEach(key => blast.add(key));
     }
     const swapType = bombA ? baseType(atB) : baseType(atA);
-    return chainSpecials(board, blast, swapType);
+    return chainSpecials(board, blast, swapType, alreadyFired);
   }
   api.bombSwapBlast = bombSwapBlast;
   /* === END TASK SECTION ml-42 === */
@@ -732,56 +755,35 @@
   // kind; a special swapped with a plain tile is not a combine (null) and stays
   // a plain swap that must match to be legal.
   //
-  // The r-axis counterpart of lineBlast: every board cell on the same r-line
-  // (constant r) as `key`, the cell itself included. Same rules as the q-axis —
-  // a key off the board, or a malformed one, clears nothing.
-  const R_LINES_BY_R = new Map();
-  HEX_LINE_GROUPS.r.forEach(line => {
-    if (line.length) R_LINES_BY_R.set(line[0].r, line);
-  });
-
-  function rLineBlast(board, key){
-    const blast = new Set();
-    if (typeof key !== 'string') return blast;
-    const parts = key.split(',');
-    if (parts.length !== 2 || !/^[+-]?\d+$/.test(parts[1])) return blast;
-    const line = R_LINES_BY_R.get(+parts[1]);
-    if (!line) return blast;
-    for (const c of line){
-      const k = hexKey(c.q, c.r);
-      if (!board || k in board) blast.add(k);
-    }
-    return blast;
-  }
-
-  // What swapping two specials together clears. Two line blasters take the
-  // q-line through a's cell (reusing lineBlast) plus the r-line through b's
-  // cell. A pair containing a colour bomb is bigger still: every tile of both
-  // swapped tiles' monsters, the bomb's own and the partner's (specials
-  // included). Either way the whole set is run through chainSpecials so any
-  // special it catches fires in turn.
+  // Two line blasters clear both of their own lines (row or column, whichever
+  // each one carries); a pair containing a colour bomb clears every tile of
+  // both swapped tiles' monsters. Either way the whole set is run through
+  // chainSpecials so any special it catches fires in turn.
   function combineSwapBlast(board, a, b){
     if (!board || !a || !b) return null;
-    const ka = hexKey(a.q, a.r), kb = hexKey(b.q, b.r);
+    const ka = cellKey(a.col, a.row), kb = cellKey(b.col, b.row);
     if (!(ka in board) || !(kb in board)) return null;
     const atA = board[ka], atB = board[kb];
     const kindA = specialOf(atA), kindB = specialOf(atB);
     if (kindA === null || kindB === null) return null; // a plain tile is not a combine
 
     if (kindA === 'bomb' || kindB === 'bomb'){
-      // Every tile of both monsters, bomb's own and partner's alike.
+      // Every tile of both monsters, bomb's own and partner's alike. A bomb in
+      // the pair has already paid for itself; it must not fire again as 3x3.
       const blast = new Set();
       cellsOfType(board, baseType(atA)).forEach(key => blast.add(key));
       cellsOfType(board, baseType(atB)).forEach(key => blast.add(key));
-      return chainSpecials(board, blast);
+      const alreadyFired = new Set();
+      if (kindA === 'bomb') alreadyFired.add(ka);
+      if (kindB === 'bomb') alreadyFired.add(kb);
+      return chainSpecials(board, blast, undefined, alreadyFired);
     }
 
-    // Two line blasters: the q-line through a's cell and the r-line through b's.
+    // Two line blasters: both of their lines.
     const blast = lineBlast(board, ka);
-    rLineBlast(board, kb).forEach(key => blast.add(key));
+    lineBlast(board, kb).forEach(key => blast.add(key));
     return chainSpecials(board, blast);
   }
-  api.rLineBlast = rLineBlast;
   api.combineSwapBlast = combineSwapBlast;
   /* === END TASK SECTION ml-45 === */
 
