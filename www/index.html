@@ -1044,9 +1044,14 @@ function idleWobbleDelay(q, r){
 function tileEl(type, q, r, key){
   const d = document.createElement('div');
   d.className = 'tile';
-  d.innerHTML = MonsterTiles.monsterTileSVG(type);
+  // The board stores a special as 'monster+kind'; the artwork and the colour
+  // rules key off the monster half only, the kind is marked separately.
+  const base = MatchLogic.baseType(type);
+  d.innerHTML = MonsterTiles.monsterTileSVG(base);
   // data-type is what the tile colour rules in the CSS key off.
-  d.dataset.q = q; d.dataset.r = r; d.dataset.key = key; d.dataset.type = type;
+  d.dataset.q = q; d.dataset.r = r; d.dataset.key = key; d.dataset.type = base;
+  const special = MatchLogic.specialOf(type);
+  if (special) d.dataset.special = special;
   // Only the idle wobble reads this; it changes nothing else about the tile.
   d.style.setProperty('--wobble-delay', idleWobbleDelay(q, r));
   positionHexTile(d, q, r);
@@ -1148,6 +1153,15 @@ window.__ML_TEST__ = {
   appState: () => appState,
   lastBeats: () => cascadeBeats.map(b => ({ ...b })),
   lastCascade: () => lastCascadeRecord.map(e => ({ ...e })),
+  // Put a board (specials included) straight into the level in play and repaint
+  // it, so a test can set up a position no deal would ever hand out.
+  setBoard: (board) => {
+    if (!session || !board || typeof board !== 'object') return null;
+    session.board = { ...board };
+    session.elMap = freshRenderBoard(session.board);
+    bindBoardEvents();
+    return Object.keys(session.board).length;
+  },
 };
 let tileKeySeq = 1;
 
@@ -1192,7 +1206,7 @@ function isResumableSession(rec){
   if (!rec || typeof rec !== 'object') return false;
   if (!LEVELS.some(l => l.id === rec.levelId)) return false;
   if (!rec.board || typeof rec.board !== 'object') return false;
-  if (HEX_CELLS.some(c => !TYPES.includes(rec.board[hexKey(c.q,c.r)]))) return false;
+  if (HEX_CELLS.some(c => !TYPES.includes(MatchLogic.baseType(rec.board[hexKey(c.q,c.r)])))) return false;
   const count = n => Number.isFinite(n) && n >= 0;
   return count(rec.score) && count(rec.movesLeft) && count(rec.charge);
 }
@@ -1753,6 +1767,7 @@ document.getElementById('power-btn').addEventListener('click', async ()=>{
         const type = session.board[key];
         el[key].innerHTML = MonsterTiles.monsterTileSVG(type);
         el[key].dataset.type = type;
+        delete el[key].dataset.special; // the reshaped tile carries no special
       });
       if (session.mode==='solo'){ session.movesLeft += 2; updateSoloHud(); }
       break;
