@@ -401,5 +401,72 @@
   api.specialOf = specialOf;
   /* === END TASK SECTION ml-33 === */
 
+  /* === TASK SECTION ml-34 match-shape (add task code and api.* exports here) === */
+  // Which special a match leaves behind, read from the matched set alone. A
+  // cell's axial coordinates say everything needed: with q, r and s=-q-r you
+  // know which of the three straight-line axes the cell sits on, so the longest
+  // unbroken run of matched cells along any axis needs no board. A run of 5 or
+  // more leaves a bomb, a run of exactly 4 leaves a line, and a plain 3-match
+  // leaves nothing (an L or T of two 3-runs is not a straight run either).
+  // Along a q line r walks by 1, along an r line q walks by 1, and along an s
+  // line q walks by 1 too (r steps with it) — one fixed coordinate plus one
+  // stepping coordinate covers each axis.
+  const MATCH_SHAPE_AXES = Object.freeze([
+    Object.freeze({ fixed: c => c.q, step: c => c.r }),
+    Object.freeze({ fixed: c => c.r, step: c => c.q }),
+    Object.freeze({ fixed: c => c.s, step: c => c.q }),
+  ]);
+  // Match keys are hexKey output ('q,r'); anything else cannot place a cell, so
+  // it is skipped rather than guessed at. Malformed sets end up with no cells.
+  function matchShapeCells(matched){
+    const cells = [];
+    for (const key of matched){
+      if (typeof key !== 'string') continue;
+      const parts = key.split(',');
+      if (parts.length !== 2) continue;
+      if (!/^[+-]?\d+$/.test(parts[0]) || !/^[+-]?\d+$/.test(parts[1])) continue;
+      const q = +parts[0], r = +parts[1];
+      cells.push({ q, r, s: -q - r });
+    }
+    return cells;
+  }
+  // Longest run of consecutive cells on any one axis line. Cells of one line
+  // are grouped by their fixed coordinate and sorted by the stepping one; a
+  // gap in the stepping coordinate breaks the run, so two 3-runs separated by
+  // an unmatched cell never add up to a 6.
+  function longestStraightRun(cells){
+    let best = 0;
+    for (const axis of MATCH_SHAPE_AXES){
+      const lines = new Map();
+      for (const c of cells){
+        const id = axis.fixed(c);
+        if (!lines.has(id)) lines.set(id, []);
+        lines.get(id).push(c);
+      }
+      for (const line of lines.values()){
+        line.sort((a, b) => axis.step(a) - axis.step(b));
+        let run = 0, prev = null;
+        for (const c of line){
+          const at = axis.step(c);
+          run = (prev !== null && at === prev + 1) ? run + 1 : 1;
+          if (run > best) best = run;
+          prev = at;
+        }
+      }
+    }
+    return best;
+  }
+  function matchShape(matched){
+    if (!matched || typeof matched[Symbol.iterator] !== 'function') return null;
+    const cells = matchShapeCells(matched);
+    if (cells.length === 0) return null; // empty or unusable match leaves nothing
+    const run = longestStraightRun(cells);
+    if (run >= 5) return 'bomb';
+    if (run === 4) return 'line';
+    return null;
+  }
+  api.matchShape = matchShape;
+  /* === END TASK SECTION ml-34 === */
+
   return api;
 });
