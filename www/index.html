@@ -1138,6 +1138,9 @@ function spawnScorePopup(matchedSet, points, combo){
    GAME SESSION
 ========================================================= */
 let session = null; // active game session object
+// The one swipe the player made while the board was busy: the most recent
+// real drag is kept, any older waiting one is replaced. Not played yet (ml-31).
+let queuedSwap = null;
 // The beats the last resolveCascade() actually played, one per clearing step,
 // copied from MatchLogic.matchBeat(run) as they were played.
 let cascadeBeats = [];
@@ -1153,6 +1156,8 @@ window.__ML_TEST__ = {
   appState: () => appState,
   lastBeats: () => cascadeBeats.map(b => ({ ...b })),
   lastCascade: () => lastCascadeRecord.map(e => ({ ...e })),
+  // How many swipes are waiting to be played once the board is free.
+  queuedSwaps: () => (queuedSwap ? 1 : 0),
   // Put a board (specials included) straight into the level in play and repaint
   // it, so a test can set up a position no deal would ever hand out.
   setBoard: (board) => {
@@ -1403,19 +1408,25 @@ function angleToHexDir(dx,dy){
 function bindBoardEvents(){
   let start = null;
   boardEl.onpointerdown = (e)=>{
-    if (!session || session.busy) return;
+    if (!session) return;
     const t = e.target.closest('.tile'); if (!t) return;
     if (t.setPointerCapture) { try { t.setPointerCapture(e.pointerId); } catch(err){} }
     start = { q:+t.dataset.q, r:+t.dataset.r, x:e.clientX, y:e.clientY };
   };
   boardEl.onpointerup = (e)=>{
-    if (!start || !session || session.busy) return;
+    if (!start || !session) return;
     const s = start; start = null;
     const dx = e.clientX - s.x, dy = e.clientY - s.y;
     if (Math.hypot(dx,dy) < 18) return;
     const [dq,dr] = angleToHexDir(dx,dy);
     const target = { q:s.q+dq, r:s.r+dr };
     if (!(hexKey(target.q,target.r) in session.board)) return;
+    // Busy board: remember this swipe as the one waiting one (the most recent
+    // swipe wins) and play nothing -- the board decides what to do with it.
+    if (session.busy){
+      queuedSwap = { a: { q: s.q, r: s.r }, b: { q: target.q, r: target.r } };
+      return;
+    }
     attemptSwap({q:s.q,r:s.r}, target);
   };
 }
