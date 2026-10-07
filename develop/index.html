@@ -240,6 +240,34 @@
     position:relative; z-index:1;
     pointer-events:none;
   }
+  /* ==== ML-43: special marks ====
+     A special tile carries data-special ("line"/"bomb") and a sibling mark next
+     to the monster svg. The tile is a flex row whose svg is width:100%, so a
+     plain child would collapse to zero width; the mark is taken out of flow and
+     pinned over the hexagon instead. It sits above the svg (z-index:2) so the
+     hexagon clip-path does not hide it, and never eats a tap. */
+  .special-mark{
+    position:absolute;
+    inset:auto 9% 9% auto;
+    width:40%; height:40%;
+    box-sizing:border-box;
+    pointer-events:none;
+    z-index:2;
+  }
+  /* Line: a bright gold elongated bar, tilted so it reads as a streak. */
+  .tile[data-special="line"] > .special-mark{
+    background:linear-gradient(145deg, #FFF3B0 0%, #E7B84B 52%, #A9781A 100%);
+    border:2px solid #2E2200;
+    box-shadow:0 0 7px 2px rgba(231,184,75,0.95);
+    transform:rotate(-28deg) scaleY(1.5);
+  }
+  /* Bomb: a round crimson flash, no tilt, so the two never look alike. */
+  .tile[data-special="bomb"] > .special-mark{
+    background:radial-gradient(circle at 40% 36%, #FFD6D6 0%, #E23B3B 46%, #8E1212 100%);
+    border:2px solid #FFFFFF;
+    box-shadow:0 0 8px 2px rgba(226,59,59,0.95);
+    transform:none;
+  }
   /* ==== ML-JUICE: idle wobble ====
      A gentle rock, so a still board breathes instead of sitting like one slab.
      Only `rotate` is ever animated: `translate` belongs to the hex positioning
@@ -1074,17 +1102,28 @@ function idleWobbleDelay(q, r){
   const n = ((Number(q) || 0) * 7 + (Number(r) || 0) * 3) % STEPS;
   return (((n % STEPS) + STEPS) % STEPS * STEP_S).toFixed(2) + 's';
 }
+// The one place a tile's contents are painted: the monster svg, plus the
+// special mark when the tile carries a special. The mark is a sibling element,
+// never part of the artwork, so the monster still draws exactly its own paths.
+function setTileContent(el, type, special){
+  el.innerHTML = MonsterTiles.monsterTileSVG(type);
+  if (special){
+    const mark = document.createElement('div');
+    mark.className = 'special-mark';
+    el.appendChild(mark);
+  }
+}
 function tileEl(type, q, r, key){
   const d = document.createElement('div');
   d.className = 'tile';
   // The board stores a special as 'monster+kind'; the artwork and the colour
   // rules key off the monster half only, the kind is marked separately.
   const base = MatchLogic.baseType(type);
-  d.innerHTML = MonsterTiles.monsterTileSVG(base);
   // data-type is what the tile colour rules in the CSS key off.
   d.dataset.q = q; d.dataset.r = r; d.dataset.key = key; d.dataset.type = base;
   const special = MatchLogic.specialOf(type);
   if (special) d.dataset.special = special;
+  setTileContent(d, base, special);
   // Only the idle wobble reads this; it changes nothing else about the tile.
   d.style.setProperty('--wobble-delay', idleWobbleDelay(q, r));
   positionHexTile(d, q, r);
@@ -1638,9 +1677,9 @@ function plantPlayerSpecial(target){
   const el = session.elMap[target.key];
   if (el){
     const monster = ML.baseType(session.board[target.key]);
-    el.innerHTML = MonsterTiles.monsterTileSVG(monster);
     el.dataset.type = monster;
     el.dataset.special = target.kind;
+    setTileContent(el, monster, target.kind);
   }
   return planted;
 }
@@ -1971,9 +2010,9 @@ document.getElementById('power-btn').addEventListener('click', async ()=>{
       // type's artwork and colour too -- otherwise the two would disagree.
       allKeys.forEach(key=>{
         const type = session.board[key];
-        el[key].innerHTML = MonsterTiles.monsterTileSVG(type);
         el[key].dataset.type = type;
         delete el[key].dataset.special; // the reshaped tile carries no special
+        setTileContent(el[key], type, null); // repaint without the old mark
       });
       if (session.mode==='solo'){ session.movesLeft += 2; updateSoloHud(); }
       break;
