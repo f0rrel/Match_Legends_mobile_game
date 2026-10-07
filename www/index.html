@@ -1475,11 +1475,15 @@ async function attemptSwap(a, b){
   const typeB = session.board[kb];
   swapHex(session.board, a, b);
   const matched = findMatches(session.board);
-  // A colour bomb swapped with anything is a legal move even when it makes no
-  // match: it clears with its own blast instead of matching, so the swap is
-  // never reverted. A plain tile still needs a match to go through.
-  const bombBlast = matched.size === 0 ? MatchLogic.bombSwapBlast(session.board, a, b) : null;
-  if (matched.size === 0 && !bombBlast){
+  // Two specials swapped together are a legal move even when they make no
+  // match: they combine into a bigger blast (line blasters take both axes, a
+  // colour bomb takes both monsters) instead of matching. Otherwise a colour
+  // bomb swapped with a plain tile still clears with its own blast as before.
+  // A plain tile still needs a match to go through.
+  const combineBlast = matched.size === 0 ? MatchLogic.combineSwapBlast(session.board, a, b) : null;
+  const bombBlast = (matched.size === 0 && !combineBlast) ? MatchLogic.bombSwapBlast(session.board, a, b) : null;
+  const noMatchBlast = combineBlast || bombBlast;
+  if (matched.size === 0 && !noMatchBlast){
     swapHex(session.board, a, b); // revert data
     Sound.swapInvalid();
     await animateSwap(a,b, true); // visual swap-and-back
@@ -1500,7 +1504,7 @@ async function attemptSwap(a, b){
   // findMatches attached to the match rides along on the grown set.
   let expanded;
   if (matched.size === 0){
-    expanded = bombBlast;
+    expanded = noMatchBlast;
   } else {
     const baseA = MatchLogic.baseType(typeA);
     const baseB = MatchLogic.baseType(typeB);
@@ -1566,7 +1570,9 @@ function swipeStillMatches(swipe){
   if (!isHexAdjacent(a,b)) return false;
   const probe = { ...session.board };
   swapHex(probe, a, b);
-  // A colour bomb swapped with anything is legal with or without a match.
+  // Two specials swapped together / a colour bomb swapped with anything are
+  // legal with or without a match.
+  if (MatchLogic.combineSwapBlast(probe, a, b)) return true;
   if (MatchLogic.bombSwapBlast(probe, a, b)) return true;
   return findMatches(probe).size > 0;
 }
