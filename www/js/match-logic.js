@@ -580,5 +580,26 @@
   api.specialAnchor = specialAnchor;
   /* === END TASK SECTION ml-35 === */
 
+  /* === TASK SECTION ml-36 plant-special (add task code and api.* exports here) === */
+  // Turn the tile on `key` into a special: its monster stays exactly as it is
+  // (re-planting over an old special only swaps the kind), and the kind is
+  // appended with the same '+' separator the rest of the game uses.
+  // Nothing is planted on an empty cell or for a kind we cannot fire — the
+  // board is left untouched and null comes back so callers can reject it.
+  const PLANT_KINDS = ['line', 'bomb'];
+  function plantSpecial(board, key, kind){
+    if (!board || typeof key !== 'string' || PLANT_KINDS.indexOf(kind) === -1) return null;
+    if (!(key in board)) return null;
+    const tile = board[key];
+    if (typeof tile !== 'string' || tile.length === 0) return null;
+    const monster = baseType(tile);
+    if (!monster) return null;
+    const planted = makeSpecial(monster, kind);
+    board[key] = planted;
+    return planted;
+  }
+  api.plantSpecial = plantSpecial;
+  /* === END TASK SECTION ml-36 === */
+
   return api;
 });
