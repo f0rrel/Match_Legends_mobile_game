@@ -1,4 +1,5 @@
 // ACCEPTANCE TEST — ml-56 every Hex side rests, and the screen does not jump.
+// REWRITTEN for ml-58: the turn is anticlockwise, so step N rests at 360 - 60*N.
 const { test, expect } = require('@playwright/test');
 const { openGame, startLevel } = require('../helpers/game.js');
 
@@ -22,14 +23,14 @@ const layout = (page) => page.evaluate(() => {
            power: [r(p.left), r(p.top), r(p.width), r(p.height)] };
 });
 
-test('each orientation step turns the board one more Hex side, clockwise, and it stays', async ({ page }) => {
+test('each orientation step turns the board one more Hex side anticlockwise, and it stays', async ({ page }) => {
   const errors = await openGame(page);
   await startLevel(page, 1);
   for (const step of [0, 1, 2, 3, 4, 5]){
     await page.evaluate((s) => { document.getElementById('board').dataset.rot = String(s); }, step);
-    await expect.poll(() => boardAngle(page)).toBe(step * 60);
-    await page.waitForTimeout(700);
-    expect(await boardAngle(page)).toBe(step * 60); // never swings back
+    await expect.poll(() => boardAngle(page)).toBe((360 - step * 60) % 360);
+    await page.waitForTimeout(1200);
+    expect(await boardAngle(page)).toBe((360 - step * 60) % 360); // never swings back
   }
   expect(errors).toEqual([]);
 });
@@ -40,7 +41,7 @@ test('the turn is anchored to the board centre: the HUD and power row do not mov
   const before = await layout(page);
   await page.evaluate(() => { document.getElementById('board').dataset.rot = '3'; });
   await expect.poll(() => boardAngle(page)).toBe(180);
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(1200);
   const after = await layout(page);
   expect(Math.abs(after.cx - before.cx)).toBeLessThanOrEqual(1);
   expect(Math.abs(after.cy - before.cy)).toBeLessThanOrEqual(1);
