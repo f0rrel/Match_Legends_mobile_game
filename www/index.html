@@ -889,6 +889,9 @@ const AI_NAMES = [
 
 const BATTLE_TARGET = 4000;
 const BATTLE_SECONDS = 60;
+// Longest run in a settled cascade that earns the board a turn. 4 is the test
+// threshold for now; production is 5, so restoring it later is a one-line change.
+const ROTATION_TRIGGER_RUN = 4;
 
 /* =========================================================
    SOUND + HAPTICS (synthesized, no asset files needed)
@@ -1770,17 +1773,18 @@ async function resolveCascade(firstMatch, comboStart, heldKey){
   lastCascadeRecord = [];
   let matched = firstMatch;
   let combo = comboStart;
-  // ML-54: whether any clearing step of THIS cascade was a huge match (a run of
-  // 5+). It only earns the board a 60° turn once the whole cascade has settled
-  // -- after the loop and reshuffleIfStuck() below -- never mid-cascade, and a
-  // plain 3- or 4-match leaves it false.
-  let hugeSettled = false;
+  // ML-54: whether any clearing step of THIS cascade reached the turn trigger
+  // run (ROTATION_TRIGGER_RUN, a run of 4 at the test threshold). It only earns
+  // the board a 60° turn once the whole cascade has settled -- after the loop and
+  // reshuffleIfStuck() below -- never mid-cascade, and a plain 3-match leaves it
+  // false.
+  let turnEarned = false;
   while (matched.size > 0){
     // score
     const av = selectedAvatar();
     let maxRun = 3;
     matched.forEach(key=>{ maxRun = Math.max(maxRun, (matched.runLen && matched.runLen[key]) || 3); });
-    if (maxRun >= 5) hugeSettled = true;
+    if (maxRun >= ROTATION_TRIGGER_RUN) turnEarned = true;
     // The beat this clearing step plays, straight from the logic's table: the
     // tiles swell, then pop, and only then may the board start falling.
     const beat = window.MatchLogic.matchBeat(maxRun);
@@ -1849,13 +1853,17 @@ async function resolveCascade(firstMatch, comboStart, heldKey){
     if (session.mode==='solo') updateSoloHud(); else updateBattleHud();
   }
   await reshuffleIfStuck();
-  // The cascade has fully settled: a huge match that was part of it turns the
-  // board one Hex side clockwise and it STAYS there (a later huge match turns it
-  // another 60°; it never resets here). Gated exactly like the other juice
-  // effects -- reduced motion or effects off leaves the board where it is.
-  if (hugeSettled && matchPopWanted()){
+  // The cascade has fully settled: a run of ROTATION_TRIGGER_RUN that was part of
+  // it turns the board one Hex side anticlockwise and it STAYS there (a later such
+  // match turns it another 60°; it never resets here). Gated exactly like the other
+  // juice effects -- reduced motion or effects off leaves the board where it is.
+  if (turnEarned && matchPopWanted()){
+    const rotor = document.getElementById('board');
     session.rotStep = MatchLogic.advanceRotationStep(session.rotStep);
-    document.getElementById('board').dataset.rot = String(session.rotStep);
+    rotor.dataset.rot = String(session.rotStep);
+    // Hold the move open until the turn lands, so the next swipe is read in the
+    // orientation the player actually sees rather than mid-turn.
+    await waitBoardTurnEnd(rotor);
   }
 }
 
@@ -1949,6 +1957,27 @@ function waitFallEnd(fallingEls, fallMs, wanted){
     fallingEls.forEach(el=> el.addEventListener('transitionend', onEnd));
     const fallTimer = wanted ? setTimeout(()=>{ timed = true; check(); }, fallMs) : null;
     const backstop = setTimeout(finish, fallMs + 60);
+  });
+}
+
+// Wait for the board to finish a turn before it is handed back to the player.
+// The 1s rotor transition runs on its own; while it plays the tiles sit between
+// sides, so a swipe read against the resting step would point the wrong way. A
+// transitionend on the board's transform ends the wait; a backstop just past the
+// longest turn keeps it from ever hanging on a transition that never reports.
+function waitBoardTurnEnd(el){
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      el.removeEventListener('transitionend', onEnd);
+      clearTimeout(backstop);
+      resolve();
+    };
+    const onEnd = (e) => { if (e.target === el && e.propertyName === 'transform') finish(); };
+    el.addEventListener('transitionend', onEnd);
+    const backstop = setTimeout(finish, 1100);
   });
 }
 
