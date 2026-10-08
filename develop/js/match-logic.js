@@ -788,7 +788,8 @@
   /* === TASK SECTION ml-52 rotation-step (add task code and api.* exports here) === */
   // The board can be shown turned in any of the 6 hex-side orientations. A
   // rotation step is which side is currently up: a whole number in 0..5, where
-  // 0 is the unturned board. Advancing always moves exactly one side clockwise.
+  // 0 is the unturned board. Advancing always moves exactly one side
+  // anticlockwise, i.e. step N is the board turned 60*N degrees anticlockwise.
   const ROTATION_STEPS = 6;
 
   // A step is only ever a whole side. Anything that is not a finite number
@@ -799,7 +800,7 @@
     return ((Math.round(step) % ROTATION_STEPS) + ROTATION_STEPS) % ROTATION_STEPS;
   }
 
-  // The next side clockwise, i.e. exactly one Hex side on from the given step.
+  // The next side anticlockwise, i.e. exactly one Hex side on from the given step.
   function advanceRotationStep(step){
     return (normaliseRotationStep(step) + 1) % ROTATION_STEPS;
   }
@@ -809,16 +810,18 @@
   const HEX_SWIPE_DIRS = [[1,0],[0,1],[-1,1],[-1,0],[0,-1],[1,-1]];
 
   // Read a swipe's pixel delta the way the player meant it, given the board is
-  // shown turned clockwise by `step` sides. The screen angle is folded into one
-  // of the six 60-degree sectors as the game has always done, then the visible
-  // turn is taken back out to recover the board direction. An omitted step (or a
-  // non-finite one) is the unturned board, exactly as before.
+  // shown turned anticlockwise by `step` sides (step N = -60*N degrees, the same
+  // angles the board is drawn at). The screen angle is folded into one of the six
+  // 60-degree sectors as the game has always done, then the visible turn is added
+  // back in to recover the board direction: a screen swipe right on a board turned
+  // one side anticlockwise is the board's down-right direction [0,1]. An omitted
+  // step (or a non-finite one) is the unturned board, exactly as before.
   function swipeDirForStep(dx, dy, step){
     const turned = normaliseRotationStep(step);
     let angle = Math.atan2(dy, dx) * 180/Math.PI;
     if (angle < 0) angle += 360;
     const idx = Math.round(angle/60) % ROTATION_STEPS;
-    const boardIdx = ((idx - turned) % ROTATION_STEPS + ROTATION_STEPS) % ROTATION_STEPS;
+    const boardIdx = ((idx + turned) % ROTATION_STEPS + ROTATION_STEPS) % ROTATION_STEPS;
     return HEX_SWIPE_DIRS[boardIdx];
   }
 
