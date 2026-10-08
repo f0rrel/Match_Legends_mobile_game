@@ -1374,6 +1374,15 @@ async function loadSavedSession(){
   updateContinueButton();
 }
 
+// ML-54: the board's orientation step lives on the session (0..5, 0 upright)
+// and is mirrored onto #board as data-rot, which is what the CSS turns by. A
+// level always starts and replays upright, and the step is never read from or
+// written to saved progress: only a settled 5+ match ever advances it.
+function resetBoardRotation(){
+  if (session) session.rotStep = 0;
+  document.getElementById('board').dataset.rot = '0';
+}
+
 // Begin a solo level. `saved` is a record from 'ml_session': it resumes the
 // interrupted attempt exactly as it was left; without one a fresh board is dealt
 // from `seed`, or from the pinned/random seed when none is given.
@@ -1391,6 +1400,7 @@ function startSoloLevel(levelId, saved, seed){
     score: resumed ? saved.score : 0,
     movesLeft: resumed ? saved.movesLeft : lvl.moves,
     charge: resumed ? saved.charge : 0,
+    rotStep: 0,
     elMap:null, busy:false, selected:null,
     scoreBuffUses:0, scoreBuffMult:1, chargeBuffUses:0, chargeBuffMult:1
   };
@@ -1398,6 +1408,9 @@ function startSoloLevel(levelId, saved, seed){
   document.getElementById('battle-hud').style.display = 'none';
   document.getElementById('game-title').textContent = chapterTitle;
   showStoryBanner({ chapter: chapterTitle, blurb: lvl.story.blurb });
+  // Reset while screen-game is still hidden, so a replayed level snaps upright
+  // instead of visibly turning back from the previous level's angle.
+  resetBoardRotation();
   goto('screen-game');
   requestAnimationFrame(()=>{
     session.elMap = freshRenderBoard(session.board);
@@ -1415,6 +1428,7 @@ function startBattle(){
     mode:'battle', seed, board:createPlayableBoard(createRng(seed)), score:0, aiScore:0, timeLeft:BATTLE_SECONDS,
     charge:0, elMap:null, busy:false, selected:null, opp,
     aiTimer:null, clockTimer:null, ended:false,
+    rotStep:0,
     scoreBuffUses:0, scoreBuffMult:1, chargeBuffUses:0, chargeBuffMult:1
   };
   document.getElementById('solo-hud').style.display = 'none';
@@ -1423,6 +1437,8 @@ function startBattle(){
   document.getElementById('battle-ai-name').textContent = opp.icon + ' ' + opp.name;
   document.getElementById('battle-target').textContent = BATTLE_TARGET;
   showStoryBanner(null);
+  // Reset while screen-game is still hidden, so a fresh battle starts upright.
+  resetBoardRotation();
   goto('screen-game');
   requestAnimationFrame(()=> showToast(`${opp.icon} ${opp.name} enters the arena!`));
   requestAnimationFrame(()=>{
@@ -1757,11 +1773,17 @@ async function resolveCascade(firstMatch, comboStart, heldKey){
   lastCascadeRecord = [];
   let matched = firstMatch;
   let combo = comboStart;
+  // ML-54: whether any clearing step of THIS cascade was a huge match (a run of
+  // 5+). It only earns the board a 60° turn once the whole cascade has settled
+  // -- after the loop and reshuffleIfStuck() below -- never mid-cascade, and a
+  // plain 3- or 4-match leaves it false.
+  let hugeSettled = false;
   while (matched.size > 0){
     // score
     const av = selectedAvatar();
     let maxRun = 3;
     matched.forEach(key=>{ maxRun = Math.max(maxRun, (matched.runLen && matched.runLen[key]) || 3); });
+    if (maxRun >= 5) hugeSettled = true;
     // The beat this clearing step plays, straight from the logic's table: the
     // tiles swell, then pop, and only then may the board start falling.
     const beat = window.MatchLogic.matchBeat(maxRun);
@@ -1830,6 +1852,14 @@ async function resolveCascade(firstMatch, comboStart, heldKey){
     if (session.mode==='solo') updateSoloHud(); else updateBattleHud();
   }
   await reshuffleIfStuck();
+  // The cascade has fully settled: a huge match that was part of it turns the
+  // board one Hex side clockwise and it STAYS there (a later huge match turns it
+  // another 60°; it never resets here). Gated exactly like the other juice
+  // effects -- reduced motion or effects off leaves the board where it is.
+  if (hugeSettled && matchPopWanted()){
+    session.rotStep = MatchLogic.advanceRotationStep(session.rotStep);
+    document.getElementById('board').dataset.rot = String(session.rotStep);
+  }
 }
 
 /* =========================================================
