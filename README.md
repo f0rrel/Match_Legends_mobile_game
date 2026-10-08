@@ -2,7 +2,7 @@
 
 This folder is a ready-to-go Capacitor project. The game is plain HTML/CSS/JS with no
 build step and no bundler: `www/index.html` (UI, rendering, audio) and
-`www/js/match-logic.js` (the pure game logic: hex grid, matching, gravity, powers).
+`www/js/match-logic.js` (the pure game logic: square grid, matching, gravity, powers).
 
 ## One-time setup on your computer
 1. Install **Node.js 22 LTS** or newer — https://nodejs.org, or with nvm: `nvm install 22`

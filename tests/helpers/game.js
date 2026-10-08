@@ -37,7 +37,7 @@ async function startLevel(page, levelId = 1) {
   await page.locator('#level-grid .level-card').nth(levelId - 1).click();
   await page.waitForFunction(() => {
     const s = window.__ML_TEST__.session();
-    return s && s.elMap && document.querySelectorAll('#board .tile').length === 61;
+    return s && s.elMap && document.querySelectorAll('#board .tile').length === 72;
   });
 }
 
@@ -46,13 +46,13 @@ async function findLegalSwap(page) {
   return page.evaluate(() => {
     const ML = window.MatchLogic;
     const board = { ...window.__ML_TEST__.session().board };
-    for (const c of ML.HEX_CELLS) {
-      for (const [dq, dr] of ML.HEX_DIRS) {
-        const n = { q: c.q + dq, r: c.r + dr };
-        if (!(ML.hexKey(n.q, n.r) in board)) continue;
-        ML.swapHex(board, c, n);
+    for (const c of ML.CELLS) {
+      for (const [dc, dr] of ML.CELL_CHECK_DIRS) {
+        const n = { col: c.col + dc, row: c.row + dr };
+        if (!(ML.cellKey(n.col, n.row) in board)) continue;
+        ML.swapCells(board, c, n);
         const matched = ML.findMatches(board).size > 0;
-        ML.swapHex(board, c, n);
+        ML.swapCells(board, c, n);
         if (matched) return { a: c, b: n };
       }
     }
@@ -60,8 +60,8 @@ async function findLegalSwap(page) {
   });
 }
 
-async function tileCenter(page, { q, r }) {
-  const box = await page.locator(`#board .tile[data-q="${q}"][data-r="${r}"]`).boundingBox();
+async function tileCenter(page, { col, row }) {
+  const box = await page.locator(`#board .tile[data-col="${col}"][data-row="${row}"]`).boundingBox();
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 

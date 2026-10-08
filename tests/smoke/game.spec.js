@@ -9,7 +9,7 @@ test('the game loads, a level starts and one move is played, with no errors', as
 
   await startLevel(page, 1);
   await expect(page.locator('#screen-game')).toHaveClass(/active/);
-  await expect(page.locator('#board .tile')).toHaveCount(61);
+  await expect(page.locator('#board .tile')).toHaveCount(72);
 
   const movesBefore = Number(await page.locator('#solo-moves').textContent());
   const move = await findLegalSwap(page);
