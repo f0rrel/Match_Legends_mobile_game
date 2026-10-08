@@ -227,8 +227,33 @@
       var(--panel);
     border-radius:18px; border:1px solid rgba(231,184,75,0.22);
     padding:4px; box-shadow:inset 0 0 30px rgba(0,0,0,0.4);
+    /* the board turns about its centre; never clip a corner of a turned hex */
+    overflow:visible;
   }
   .board{position:relative; width:100%; height:100%;}
+  /* ==== ML-53 / ML-56: board rotor ====
+     The board carries its orientation in data-rot ('0'..'5', 0 = upright) and
+     turns clockwise to the matching --board-rot angle, one Hex side (60°) per
+     step. Every side has a resting angle, so repeated triggers keep advancing
+     instead of running out after 60°. It turns about its own centre
+     (transform-origin 50% 50%), so the board's centre point never moves and the
+     HUD, story banner, topbar and power row -- siblings outside #board -- stay
+     upright and unshifted. No rule ever takes --board-rot back to upright once
+     the transition ends: data-rot N always shows the board turned 60*N degrees
+     clockwise and it stays. The parent .board-wrap is overflow:visible so the
+     turned board is never clipped. The global reduced-motion rule below
+     collapses the .5s transition to a snap. */
+  #board{
+    transform:rotate(var(--board-rot, 0deg));
+    transform-origin:50% 50%;
+    transition:transform .5s cubic-bezier(.34,1.2,.64,1);
+  }
+  #board[data-rot="0"]{ --board-rot:0deg; }
+  #board[data-rot="1"]{ --board-rot:60deg; }
+  #board[data-rot="2"]{ --board-rot:120deg; }
+  #board[data-rot="3"]{ --board-rot:180deg; }
+  #board[data-rot="4"]{ --board-rot:240deg; }
+  #board[data-rot="5"]{ --board-rot:300deg; }
   .tile{
     position:absolute; display:flex; align-items:center; justify-content:center;
     font-size:min(5.6vw, 24px);
@@ -1349,6 +1374,15 @@ async function loadSavedSession(){
   updateContinueButton();
 }
 
+// ML-54: the board's orientation step lives on the session (0..5, 0 upright)
+// and is mirrored onto #board as data-rot, which is what the CSS turns by. A
+// level always starts and replays upright, and the step is never read from or
+// written to saved progress: only a settled 5+ match ever advances it.
+function resetBoardRotation(){
+  if (session) session.rotStep = 0;
+  document.getElementById('board').dataset.rot = '0';
+}
+
 // Begin a solo level. `saved` is a record from 'ml_session': it resumes the
 // interrupted attempt exactly as it was left; without one a fresh board is dealt
 // from `seed`, or from the pinned/random seed when none is given.
@@ -1366,6 +1400,7 @@ function startSoloLevel(levelId, saved, seed){
     score: resumed ? saved.score : 0,
     movesLeft: resumed ? saved.movesLeft : lvl.moves,
     charge: resumed ? saved.charge : 0,
+    rotStep: 0,
     elMap:null, busy:false, selected:null,
     scoreBuffUses:0, scoreBuffMult:1, chargeBuffUses:0, chargeBuffMult:1
   };
@@ -1373,6 +1408,9 @@ function startSoloLevel(levelId, saved, seed){
   document.getElementById('battle-hud').style.display = 'none';
   document.getElementById('game-title').textContent = chapterTitle;
   showStoryBanner({ chapter: chapterTitle, blurb: lvl.story.blurb });
+  // Reset while screen-game is still hidden, so a replayed level snaps upright
+  // instead of visibly turning back from the previous level's angle.
+  resetBoardRotation();
   goto('screen-game');
   requestAnimationFrame(()=>{
     session.elMap = freshRenderBoard(session.board);
@@ -1390,6 +1428,7 @@ function startBattle(){
     mode:'battle', seed, board:createPlayableBoard(createRng(seed)), score:0, aiScore:0, timeLeft:BATTLE_SECONDS,
     charge:0, elMap:null, busy:false, selected:null, opp,
     aiTimer:null, clockTimer:null, ended:false,
+    rotStep:0,
     scoreBuffUses:0, scoreBuffMult:1, chargeBuffUses:0, chargeBuffMult:1
   };
   document.getElementById('solo-hud').style.display = 'none';
@@ -1398,6 +1437,8 @@ function startBattle(){
   document.getElementById('battle-ai-name').textContent = opp.icon + ' ' + opp.name;
   document.getElementById('battle-target').textContent = BATTLE_TARGET;
   showStoryBanner(null);
+  // Reset while screen-game is still hidden, so a fresh battle starts upright.
+  resetBoardRotation();
   goto('screen-game');
   requestAnimationFrame(()=> showToast(`${opp.icon} ${opp.name} enters the arena!`));
   requestAnimationFrame(()=>{
@@ -1491,14 +1532,9 @@ function updatePowerUI(){
 /* =========================================================
    BOARD INTERACTION (swipe to swap)
 ========================================================= */
-// A swipe's screen-pixel angle maps to one of the 6 hex directions (60° apart).
-const HEX_SWIPE_DIRS = [ [1,0], [0,1], [-1,1], [-1,0], [0,-1], [1,-1] ]; // at 0,60,120,180,240,300 deg
-function angleToHexDir(dx,dy){
-  let angle = Math.atan2(dy,dx) * 180/Math.PI;
-  if (angle<0) angle += 360;
-  const idx = Math.round(angle/60) % 6;
-  return HEX_SWIPE_DIRS[idx];
-}
+// A swipe is read in the orientation the player sees: the logic module folds the
+// screen-pixel angle through the board's current turn (session.rotStep) and owns
+// the one canonical copy of the six hex directions.
 function bindBoardEvents(){
   let start = null;
   boardEl.onpointerdown = (e)=>{
@@ -1512,7 +1548,7 @@ function bindBoardEvents(){
     const s = start; start = null;
     const dx = e.clientX - s.x, dy = e.clientY - s.y;
     if (Math.hypot(dx,dy) < 18) return;
-    const [dq,dr] = angleToHexDir(dx,dy);
+    const [dq,dr] = MatchLogic.swipeDirForStep(dx, dy, session.rotStep);
     const target = { q:s.q+dq, r:s.r+dr };
     if (!(hexKey(target.q,target.r) in session.board)) return;
     // Busy board: remember this swipe as the one waiting one (the most recent
@@ -1732,11 +1768,17 @@ async function resolveCascade(firstMatch, comboStart, heldKey){
   lastCascadeRecord = [];
   let matched = firstMatch;
   let combo = comboStart;
+  // ML-54: whether any clearing step of THIS cascade was a huge match (a run of
+  // 5+). It only earns the board a 60° turn once the whole cascade has settled
+  // -- after the loop and reshuffleIfStuck() below -- never mid-cascade, and a
+  // plain 3- or 4-match leaves it false.
+  let hugeSettled = false;
   while (matched.size > 0){
     // score
     const av = selectedAvatar();
     let maxRun = 3;
     matched.forEach(key=>{ maxRun = Math.max(maxRun, (matched.runLen && matched.runLen[key]) || 3); });
+    if (maxRun >= 5) hugeSettled = true;
     // The beat this clearing step plays, straight from the logic's table: the
     // tiles swell, then pop, and only then may the board start falling.
     const beat = window.MatchLogic.matchBeat(maxRun);
@@ -1805,6 +1847,14 @@ async function resolveCascade(firstMatch, comboStart, heldKey){
     if (session.mode==='solo') updateSoloHud(); else updateBattleHud();
   }
   await reshuffleIfStuck();
+  // The cascade has fully settled: a huge match that was part of it turns the
+  // board one Hex side clockwise and it STAYS there (a later huge match turns it
+  // another 60°; it never resets here). Gated exactly like the other juice
+  // effects -- reduced motion or effects off leaves the board where it is.
+  if (hugeSettled && matchPopWanted()){
+    session.rotStep = MatchLogic.advanceRotationStep(session.rotStep);
+    document.getElementById('board').dataset.rot = String(session.rotStep);
+  }
 }
 
 /* =========================================================
@@ -1932,7 +1982,12 @@ async function animateCollapse(plan, clearedEls = [], fallMs = 170, motionWanted
   incoming.forEach(el=> el.style.opacity = '0');
   Object.keys(session.elMap).forEach(key=>{
     const [q,r] = key.split(',').map(Number);
-    positionHexTile(session.elMap[key], q, r);
+    const el = session.elMap[key];
+    // Every tile reports the cell it now stands on: a refilled tile is created
+    // at a fractional spawn height, so its data-q/data-r must be rewritten to
+    // the real cell here or a later swipe from it would be read at no cell.
+    el.dataset.q = q; el.dataset.r = r;
+    positionHexTile(el, q, r);
   });
   incoming.forEach(el=>{ el.style.opacity=''; el.classList.remove('spawning'); });
   // the tiles are back in their places and the fall is under way: that is the
@@ -1985,7 +2040,12 @@ document.getElementById('hint-btn').addEventListener('click', ()=>{
   const hint = findHint(session.board);
   clearHint();
   if (!hint){ showToast('No hint available — no swap can match'); return; }
-  [hint.a, hint.b].forEach(c=>{
+  // A turned board answers the hint with the single tile to swipe from: one
+  // glow stays unambiguous against the rotated grid, and the swap is read back
+  // through the turn by the same mapping the swipe itself uses. An upright
+  // board keeps its familiar two-tile hint.
+  const hinted = session.rotStep ? [hint.a] : [hint.a, hint.b];
+  hinted.forEach(c=>{
     const el = session.elMap[hexKey(c.q, c.r)];
     if (el) el.classList.add('hint');
   });
