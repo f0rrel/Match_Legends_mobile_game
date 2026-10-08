@@ -1532,14 +1532,9 @@ function updatePowerUI(){
 /* =========================================================
    BOARD INTERACTION (swipe to swap)
 ========================================================= */
-// A swipe's screen-pixel angle maps to one of the 6 hex directions (60° apart).
-const HEX_SWIPE_DIRS = [ [1,0], [0,1], [-1,1], [-1,0], [0,-1], [1,-1] ]; // at 0,60,120,180,240,300 deg
-function angleToHexDir(dx,dy){
-  let angle = Math.atan2(dy,dx) * 180/Math.PI;
-  if (angle<0) angle += 360;
-  const idx = Math.round(angle/60) % 6;
-  return HEX_SWIPE_DIRS[idx];
-}
+// A swipe is read in the orientation the player sees: the logic module folds the
+// screen-pixel angle through the board's current turn (session.rotStep) and owns
+// the one canonical copy of the six hex directions.
 function bindBoardEvents(){
   let start = null;
   boardEl.onpointerdown = (e)=>{
@@ -1553,7 +1548,7 @@ function bindBoardEvents(){
     const s = start; start = null;
     const dx = e.clientX - s.x, dy = e.clientY - s.y;
     if (Math.hypot(dx,dy) < 18) return;
-    const [dq,dr] = angleToHexDir(dx,dy);
+    const [dq,dr] = MatchLogic.swipeDirForStep(dx, dy, session.rotStep);
     const target = { q:s.q+dq, r:s.r+dr };
     if (!(hexKey(target.q,target.r) in session.board)) return;
     // Busy board: remember this swipe as the one waiting one (the most recent
@@ -1987,7 +1982,12 @@ async function animateCollapse(plan, clearedEls = [], fallMs = 170, motionWanted
   incoming.forEach(el=> el.style.opacity = '0');
   Object.keys(session.elMap).forEach(key=>{
     const [q,r] = key.split(',').map(Number);
-    positionHexTile(session.elMap[key], q, r);
+    const el = session.elMap[key];
+    // Every tile reports the cell it now stands on: a refilled tile is created
+    // at a fractional spawn height, so its data-q/data-r must be rewritten to
+    // the real cell here or a later swipe from it would be read at no cell.
+    el.dataset.q = q; el.dataset.r = r;
+    positionHexTile(el, q, r);
   });
   incoming.forEach(el=>{ el.style.opacity=''; el.classList.remove('spawning'); });
   // the tiles are back in their places and the fall is under way: that is the
@@ -2040,7 +2040,12 @@ document.getElementById('hint-btn').addEventListener('click', ()=>{
   const hint = findHint(session.board);
   clearHint();
   if (!hint){ showToast('No hint available — no swap can match'); return; }
-  [hint.a, hint.b].forEach(c=>{
+  // A turned board answers the hint with the single tile to swipe from: one
+  // glow stays unambiguous against the rotated grid, and the swap is read back
+  // through the turn by the same mapping the swipe itself uses. An upright
+  // board keeps its familiar two-tile hint.
+  const hinted = session.rotStep ? [hint.a] : [hint.a, hint.b];
+  hinted.forEach(c=>{
     const el = session.elMap[hexKey(c.q, c.r)];
     if (el) el.classList.add('hint');
   });
