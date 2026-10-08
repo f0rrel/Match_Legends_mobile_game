@@ -233,27 +233,29 @@
   .board{position:relative; width:100%; height:100%;}
   /* ==== ML-53 / ML-56: board rotor ====
      The board carries its orientation in data-rot ('0'..'5', 0 = upright) and
-     turns clockwise to the matching --board-rot angle, one Hex side (60°) per
-     step. Every side has a resting angle, so repeated triggers keep advancing
-     instead of running out after 60°. It turns about its own centre
-     (transform-origin 50% 50%), so the board's centre point never moves and the
-     HUD, story banner, topbar and power row -- siblings outside #board -- stay
-     upright and unshifted. No rule ever takes --board-rot back to upright once
-     the transition ends: data-rot N always shows the board turned 60*N degrees
-     clockwise and it stays. The parent .board-wrap is overflow:visible so the
-     turned board is never clipped. The global reduced-motion rule below
-     collapses the .5s transition to a snap. */
+     turns anticlockwise to the matching --board-rot angle, one Hex side (60°)
+     per step: 0 → 300 → 240 → 180 → 120 → 60 and back to 0. Every side has a
+     resting angle, so repeated triggers keep advancing instead of running out
+     after 60°. It turns about its own centre (transform-origin 50% 50%), so the
+     board's centre point never moves and the HUD, story banner, topbar and power
+     row -- siblings outside #board -- stay upright and unshifted. No rule ever
+     takes --board-rot back to upright once the transition ends: data-rot N
+     always shows the board turned 60*N degrees anticlockwise and it stays. The
+     turn takes about a second (1000ms) with a gentle ease, so the eye catches
+     the whole beat instead of the old half-second flick. The parent .board-wrap
+     is overflow:visible so the turned board is never clipped. The global
+     reduced-motion rule below collapses the 1s transition to a snap. */
   #board{
     transform:rotate(var(--board-rot, 0deg));
     transform-origin:50% 50%;
-    transition:transform .5s cubic-bezier(.34,1.2,.64,1);
+    transition:transform 1s cubic-bezier(.45,.05,.35,1);
   }
   #board[data-rot="0"]{ --board-rot:0deg; }
-  #board[data-rot="1"]{ --board-rot:60deg; }
-  #board[data-rot="2"]{ --board-rot:120deg; }
+  #board[data-rot="1"]{ --board-rot:300deg; }
+  #board[data-rot="2"]{ --board-rot:240deg; }
   #board[data-rot="3"]{ --board-rot:180deg; }
-  #board[data-rot="4"]{ --board-rot:240deg; }
-  #board[data-rot="5"]{ --board-rot:300deg; }
+  #board[data-rot="4"]{ --board-rot:120deg; }
+  #board[data-rot="5"]{ --board-rot:60deg; }
   .tile{
     position:absolute; display:flex; align-items:center; justify-content:center;
     font-size:min(5.6vw, 24px);
