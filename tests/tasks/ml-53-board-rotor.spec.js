@@ -1,5 +1,5 @@
 // ACCEPTANCE TEST — ml-53 the board's rotor turns it one Hex side anticlockwise and holds.
-// REWRITTEN for ml-58: the turn is anticlockwise (0 -> 300 -> 240 ...) and takes about a second.
+// REWRITTEN for ml-58: the turn is anticlockwise (0 -> -60 -> -120 ...) and takes about a second.
 const { test, expect } = require('@playwright/test');
 const { openGame, startLevel } = require('../helpers/game.js');
 
@@ -11,6 +11,18 @@ const boardAngle = (page) => page.evaluate(() => {
   const p = m[1].split(',').map(Number);
   const deg = Math.round(Math.atan2(p[1], p[0]) * 180 / Math.PI);
   return ((deg % 360) + 360) % 360;
+});
+
+// The angle as CSS is carrying it: negative on the anticlockwise way round, so
+// a mid-turn reading can tell 60° of anticlockwise travel from 300° the other
+// way -- both end on the same normalised angle.
+const boardAngleSigned = (page) => page.evaluate(() => {
+  const t = getComputedStyle(document.getElementById('board')).transform;
+  if (!t || t === 'none') return 0;
+  const m = t.match(/matrix\(([^)]+)\)/);
+  if (!m) return 0;
+  const p = m[1].split(',').map(Number);
+  return Math.atan2(p[1], p[0]) * 180 / Math.PI;
 });
 
 test('the board turns one Hex side anticlockwise and stays there', async ({ page }) => {
@@ -37,9 +49,9 @@ test('the turn takes about a second, so the eye catches it', async ({ page }) =>
 
   await page.evaluate(() => { document.getElementById('board').dataset.rot = '1'; });
   await page.waitForTimeout(250);
-  const mid = await boardAngle(page);
-  expect(mid).toBeGreaterThan(0);
-  expect(mid).toBeLessThan(300); // still on its way: a visible turn, not a snap
+  const mid = await boardAngleSigned(page);
+  expect(mid).toBeLessThan(-1); // already moving, and anticlockwise (negative)
+  expect(mid).toBeGreaterThan(-60); // still on its way: a visible turn, not a snap
 });
 
 test('the tiles turn with the board as one object', async ({ page }) => {

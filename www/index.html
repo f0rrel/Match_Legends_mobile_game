@@ -234,11 +234,17 @@
   /* ==== ML-53 / ML-56: board rotor ====
      The board carries its orientation in data-rot ('0'..'5', 0 = upright) and
      turns anticlockwise to the matching --board-rot angle, one Hex side (60°)
-     per step: 0 → 300 → 240 → 180 → 120 → 60 and back to 0. Every side has a
-     resting angle, so repeated triggers keep advancing instead of running out
-     after 60°. It turns about its own centre (transform-origin 50% 50%), so the
-     board's centre point never moves and the HUD, story banner, topbar and power
-     row -- siblings outside #board -- stay upright and unshifted. No rule ever
+     per step: 0 → -60 → -120 → -180 → -240 → -300. The angle is the real
+     displacement, never its modulo-360 twin: CSS animates the number it is
+     handed, so -60 covers 60° anticlockwise in a second while the equivalent
+     +300 would crawl the long way round clockwise. Every side has a resting
+     angle, so repeated triggers keep advancing instead of running out after
+     60°. '6' is the sixth turn landing on a full turn (-360deg, which looks
+     exactly like 0deg); the script swaps it for '0' with the transition off,
+     so the cycle comes home anticlockwise instead of spinning 300° back. It
+     turns about its own centre (transform-origin 50% 50%), so the board's
+     centre point never moves and the HUD, story banner, topbar and power row
+     -- siblings outside #board -- stay upright and unshifted. No rule ever
      takes --board-rot back to upright once the transition ends: data-rot N
      always shows the board turned 60*N degrees anticlockwise and it stays. The
      turn takes about a second (1000ms) with a gentle ease, so the eye catches
@@ -251,11 +257,12 @@
     transition:transform 1s cubic-bezier(.45,.05,.35,1);
   }
   #board[data-rot="0"]{ --board-rot:0deg; }
-  #board[data-rot="1"]{ --board-rot:300deg; }
-  #board[data-rot="2"]{ --board-rot:240deg; }
-  #board[data-rot="3"]{ --board-rot:180deg; }
-  #board[data-rot="4"]{ --board-rot:120deg; }
-  #board[data-rot="5"]{ --board-rot:60deg; }
+  #board[data-rot="1"]{ --board-rot:-60deg; }
+  #board[data-rot="2"]{ --board-rot:-120deg; }
+  #board[data-rot="3"]{ --board-rot:-180deg; }
+  #board[data-rot="4"]{ --board-rot:-240deg; }
+  #board[data-rot="5"]{ --board-rot:-300deg; }
+  #board[data-rot="6"]{ --board-rot:-360deg; }
   .tile{
     position:absolute; display:flex; align-items:center; justify-content:center;
     font-size:min(5.6vw, 24px);
@@ -1382,10 +1389,29 @@ async function loadSavedSession(){
 // ML-54: the board's orientation step lives on the session (0..5, 0 upright)
 // and is mirrored onto #board as data-rot, which is what the CSS turns by. A
 // level always starts and replays upright, and the step is never read from or
-// written to saved progress: only a settled 5+ match ever advances it.
+// written to saved progress: only a settled run of ROTATION_TRIGGER_RUN ever
+// advances it.
+// data-rot is stepped with the transition switched off, so putting the board
+// upright again lands it there at once instead of unwinding the last side (or
+// a whole -360deg cycle) in front of the player. A forced reflow in between
+// lets the browser commit the angle while the transition is off, so the next
+// turn animates as usual.
+function setBoardRotation(rot, animate){
+  const rotor = document.getElementById('board');
+  if (!animate){
+    const held = rotor.style.transition;
+    rotor.style.transition = 'none';
+    rotor.dataset.rot = rot;
+    void rotor.offsetWidth;
+    rotor.style.transition = held;
+    return;
+  }
+  rotor.dataset.rot = rot;
+}
+
 function resetBoardRotation(){
   if (session) session.rotStep = 0;
-  document.getElementById('board').dataset.rot = '0';
+  setBoardRotation('0', false);
 }
 
 // Begin a solo level. `saved` is a record from 'ml_session': it resumes the
@@ -1859,11 +1885,18 @@ async function resolveCascade(firstMatch, comboStart, heldKey){
   // juice effects -- reduced motion or effects off leaves the board where it is.
   if (turnEarned && matchPopWanted()){
     const rotor = document.getElementById('board');
-    session.rotStep = MatchLogic.advanceRotationStep(session.rotStep);
-    rotor.dataset.rot = String(session.rotStep);
+    const stepped = MatchLogic.advanceRotationStep(session.rotStep);
+    session.rotStep = stepped;
+    // The sixth turn ends the cycle upright: data-rot '6' rests on -360deg, one
+    // full turn, so the board keeps turning anticlockwise the whole way round
+    // instead of crawling 300deg back to 0. It looks exactly like '0' already
+    // does, so once it lands it is settled back to '0' with the transition off
+    // -- no spin, and the next turn starts from upright again.
+    setBoardRotation(String(stepped === 0 ? 6 : stepped), true);
     // Hold the move open until the turn lands, so the next swipe is read in the
     // orientation the player actually sees rather than mid-turn.
     await waitBoardTurnEnd(rotor);
+    if (rotor.dataset.rot === '6') setBoardRotation('0', false);
   }
 }
 
