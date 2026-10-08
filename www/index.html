@@ -229,6 +229,22 @@
     padding:4px; box-shadow:inset 0 0 30px rgba(0,0,0,0.4);
   }
   .board{position:relative; width:100%; height:100%;}
+  /* ==== ML-53: board rotor ====
+     The board carries its orientation in data-rot ('0'..'5', 0 = upright) and
+     turns clockwise to the matching --board-rot angle. One Hex side (60°) per
+     step, one clean eased turn, and the board HOLDS the angle it reached: no
+     rule ever takes --board-rot back to upright once the transition ends, so a
+     2nd or 3rd huge match has somewhere to go (further sides arrive in ml-56).
+     Only #board rotates -- the HUD, story banner, topbar and power row are
+     siblings outside it, so they stay upright. The global reduced-motion rule
+     below collapses the .5s transition to a snap. */
+  #board{
+    transform:rotate(var(--board-rot, 0deg));
+    transform-origin:50% 50%;
+    transition:transform .5s cubic-bezier(.34,1.2,.64,1);
+  }
+  #board[data-rot="0"]{ --board-rot:0deg; }
+  #board[data-rot="1"]{ --board-rot:60deg; }
   .tile{
     position:absolute; display:flex; align-items:center; justify-content:center;
     font-size:min(5.6vw, 24px);
