@@ -1,8 +1,24 @@
 # Match Legends — build the Android APK
 
 This folder is a ready-to-go Capacitor project. The game is plain HTML/CSS/JS with no
-build step and no bundler: `www/index.html` (UI, rendering, audio) and
-`www/js/match-logic.js` (the pure game logic: hex grid, matching, gravity, powers).
+build step and no bundler: `www/index.html` (UI, rendering, audio), plus
+
+- `www/js/match-logic.js` — the pure game logic (board, matching, gravity, powers),
+- `www/js/monster-tiles.js` — the SVG monster faces drawn on the tiles.
+
+## Board versions
+
+Match Legends is currently preserved in two board versions. **Neither is final** —
+the board direction has not been decided, and neither replaces the other.
+
+| Version | Branch | Direction document |
+| --- | --- | --- |
+| Hex | `develop` (this checkout) | [docs/DIRECTION-HEX.md](docs/DIRECTION-HEX.md) |
+| Square | `square-board` | [docs/DIRECTION-SQUARE.md](docs/DIRECTION-SQUARE.md) |
+
+Shared direction and the branch layout are in [docs/DIRECTION.md](docs/DIRECTION.md).
+The Square branch ships `www/js/jewel-tiles.js` and `www/js/juice.js` instead of
+`monster-tiles.js`; everything else about building the APK is the same.
 
 ## One-time setup on your computer
 1. Install **Node.js 22 LTS** or newer — https://nodejs.org, or with nvm: `nvm install 22`
@@ -41,14 +57,13 @@ Just open `www/index.html` (together with `www/js/`) in a phone's browser (AirDr
 or tap "Add to Home Screen" for an app-like icon. Same game, zero setup — useful while
 Android Studio installs in the background.
 
-## Notes on this MVP
-- No real payments are wired up. Locked avatars have an "Unlock (Test Mode)" button
-  that just flips them unlocked for testing — swap this for real IAP before any launch.
-- Progress (gems, unlocked avatars, level progress) is kept in memory only when run as
-  a real installed app (outside Claude's own preview sandbox), so it resets on app
-  restart for now. Easy next step: swap the `Storage` object in the script for
-  `localStorage` (works fine in a real installed app, just not inside Claude.ai's
-  artifact preview) or a small backend if you want it to persist.
+## Notes
+- Progress persists: gems, unlocked avatars, the chosen avatar and level progress
+  are saved through native storage when installed and fall back to `localStorage` in
+  a browser, so they survive a reload or an app restart.
+- No real payments are wired up. Locked avatars have an `Unlock <price> (Test Mode)`
+  button that just flips them unlocked for testing — swap this for real IAP before any
+  launch.
 
 ## Tests
 Requires **Node.js 22** or newer (`nvm use` picks it up from `.nvmrc`).
@@ -56,10 +71,10 @@ Requires **Node.js 22** or newer (`nvm use` picks it up from `.nvmrc`).
 npm install
 npx playwright install chromium     # once per machine
 npm test                            # unit tests (node:test) + headless smoke test (Playwright)
-npm run test:tasks                  # PENDING task acceptance tests: expected to fail until each task is done
+npm run test:tasks                  # the ml-* acceptance tests (all currently pass)
 ```
 - `tests/unit/` — unit tests of `www/js/match-logic.js` (Node's built-in test runner).
 - `tests/smoke/` — one Playwright test: the game loads with no console errors, a level
   starts, and one scripted move works.
-- `tests/tasks/` — acceptance tests for planned tasks, written before the work. They are
-  **expected to fail** until their task is done, and `npm test` does not run them.
+- `tests/tasks/` — the acceptance tests written for each `ml-*` task. They are kept
+  out of `npm test` and run separately; see [tests/tasks/README.md](tests/tasks/README.md).

@@ -1,37 +1,93 @@
-# Match Legends — Game Direction
+# Match Legends — Project Direction
 
-## Vision
-A bright, cute and competitive match-3 with funny monsters. Quick games (≤3 min) that make you want "just one more", and powers you unlock solo and then show off against friends.
+Match Legends is a bright, cute and competitive match-3 for phones. Quick games
+(≤3 min) that make you want "just one more", plus powers you unlock solo and then
+show off against friends.
 
-## Audience
-Mainly women 20–55, casual phone players. Short sessions on a phone, portrait mode, played with one thumb. English first; text kept ready for translation.
+**Audience:** mainly women 20–55, casual phone players. Short sessions, portrait
+mode, played with one thumb. English first; text kept ready for translation.
 
-## Feel (every change is judged against this)
-Bright · flashy · juicy · cute · competitive. Every action gets visible, satisfying feedback. Big moments (specials, powers, wins) must feel big: you should see and hear them. Never overdo the colors: readability comes first. Every match bursts particles in its colour; cascades escalate (sound, callout, shake). Specials combine (line+line, line+bomb, bomb+bomb). Winning ends with a "fever" where leftover moves turn into specials that go off one by one.
+**Feel (every change is judged against this):** bright · flashy · juicy · cute ·
+competitive. Every action gets visible, satisfying feedback. Big moments (specials,
+powers, wins) must feel big: you should see and hear them. Never overdo the colors:
+readability comes first.
 
-## Never change
-- A square board (rows and columns) that fills a portrait phone screen.
-- Core matching: 3 or more of the same tiles in a row or column.
+## Two board directions — not decided yet
+
+The project is currently experimenting with two board versions. **Both are preserved
+as active alternatives, and the final board direction has not been decided.** Neither
+version replaces the other and neither is a "v2".
+
+| | Hex | Square |
+| --- | --- | --- |
+| Branch | `develop` | `square-board` |
+| Board | hex-of-hexes, `HEX_RADIUS = 4`, 61 cells | 8 × 9 grid, 72 cells |
+| Direction document | [DIRECTION-HEX.md](DIRECTION-HEX.md) | [DIRECTION-SQUARE.md](DIRECTION-SQUARE.md) |
+| Preservation tag | `hex/pre-square` → `989187528e3f31de7554b80b5d7c64dc57ac2eb5` | `square/base` → `408465dea00c8b4900f09cc9643b3fbb6e73aa56` |
+
+The other branches: `main` is the release line (tags `v0.1`, `v0.2`, `v0.3`, all
+Hex) and `gh-pages` holds the published builds.
+
+### Playable builds (GitHub Pages)
+
+- Hex, `develop` build: <https://f0rrel.github.io/Match_Legends_mobile_game/develop/>
+- Hex, release build (`main`, v0.3): <https://f0rrel.github.io/Match_Legends_mobile_game/>
+- Square: <https://f0rrel.github.io/Match_Legends_mobile_game/square-board/>
+
+## Shared by both directions
+
+Implemented identically in both branches:
+
+- Plain HTML/CSS/JS with no build step: `www/index.html` (UI, rendering, audio) plus
+  a pure logic module `www/js/match-logic.js` that runs in the browser and under
+  `node:test`.
+- Six tile types — sword, shield, urn, crown, flame, gem. Match 3 or more in a line,
+  gravity collapses and refills, seeded RNG (`createRng`) so a board is reproducible.
+- Specials from longer matches, specials chained when a blast catches one, and two
+  specials swapped together combining.
+- Hint button, taps queued while effects play, effects toggle, sound toggle.
+  Sound effects and background music are synthesized in Web Audio (`Sound`, `Music`
+  — an ambient pad loop); there are no audio files.
+- Debug panel behind `?debug=1`: seed, stuck board, saved progress, any level.
+- 0–3 star rating, gems, progress persisted (native storage first, `localStorage`
+  second — it survives a reload).
+- Solo campaign: 6 story levels with a score target and a move limit. Battle Arena:
+  a 60-second race against an AI.
+- Six avatars, each with one signature power; an `Unlock … (Test Mode)` button stands
+  in for real payments.
+- Android/Capacitor packaging, `npm test` (unit + Playwright smoke) and
+  `npm run test:tasks`.
+
+Board geometry, tile artwork, special kinds and their blast shapes, and the big
+effect moments differ — those are documented per direction.
+
+## Shared, intended but not yet implemented
+
+Written in the direction documents and absent from both branches today:
+
+- Real recorded sound files (`www/assets/audio/`) and music loops, plus separate
+  sound and music toggles. Today every effect and the ambient music are generated in
+  code, and one toggle covers both.
+- Endless seeded levels with rotating goals (collect X, clear blockers), easier
+  "breather" levels, and levels grouped into worlds (one world = one hotel floor).
+  Today it is 6 fixed levels with a score target.
+- Versus AI as a turn-based duel over 5 rounds with Easy / Normal / Hard (today: a
+  60-second race).
+- Versus friends, played asynchronously.
+- Progression that spends coins and stars to unlock avatars and powers (today gems
+  only accumulate), plus daily rewards and streaks.
+- Real payments instead of the Test Mode unlock.
+
+## Never change (both directions)
+
 - Games last ≤3 minutes.
 - Free to play, no real money.
+- Powers differ in kind, not in strength — no pay-to-win.
+- Portrait phone screen, played with one thumb.
 
-## Look
--- Tiles are simple glossy jewels drawn in code: six colours, each with its own simple shape (circle, square, triangle, diamond, hexagon, star), so they are readable even without colour. All the excitement goes into specials, combos and effects, not into the normal tiles.
-- The monster characters live in the avatars and the power moments, not on the board.
-
-## Modes
-- Normal (solo): endless levels generated from a seed, with a move limit (≈20 moves); leftover moves become a bonus. Goals rotate: score target, collect X of a monster, clear blockers. Difficulty rises slowly with regular easier "breather" levels. Levels are grouped into worlds, one world = one hotel floor. 1–3 stars per level.
-- Versus AI: a turn-based duel, 2 moves per turn, extra moves for big matches, highest score after 5 rounds wins. Easy / Normal / Hard; Easy must lose to beginners.
-- Versus friends (later): the same duel rules, played asynchronously.
-
-## Avatars and powers
-Before each game you pick one avatar; each avatar has one signature power with its own animation and sound. In duels, powers differ in kind, not in strength (no pay-to-win).
-
-## Progression (the "one more game" loop)
-Coins and stars from solo play unlock new avatars and powers. One guaranteed new avatar every few worlds. Daily rewards, streaks, near-miss "so close!" moments and surprise bonuses are welcome.
-
-## Sound
-Real sound files (www/assets/audio/) for matches, specials, powers and wins, with the synthesized beeps as a fallback. Cute monster sounds and short looping music. Separate sound and music toggles, always available.
+Board rules are per direction: see [DIRECTION-HEX.md](DIRECTION-HEX.md) and
+[DIRECTION-SQUARE.md](DIRECTION-SQUARE.md).
 
 ## Testing
+
 A group of friends plays the preview link and gives feedback outside the game.
