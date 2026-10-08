@@ -85,6 +85,10 @@
   .screen{display:none; flex-direction:column; flex:1; padding:18px 16px 28px;}
   .screen.active{display:flex; animation:screenIn .22s cubic-bezier(.34,1.4,.64,1);}
   @keyframes screenIn{ 0%{ opacity:0; scale:0.97; } 100%{ opacity:1; scale:1; } }
+  /* The board now spans the phone edge-to-edge, so the game screen fades in
+     without the column-wide zoom that would inset it for the first frames. */
+  #screen-game.active{ animation:gameScreenIn .22s ease; }
+  @keyframes gameScreenIn{ 0%{ opacity:0; } 100%{ opacity:1; } }
 
   .backbtn, .gemcount, .menu-btn, .avatar-strip, .avatar-card, .level-card:not(.locked),
   .power-ring-btn, .hint-btn, .btn, .unlockbtn{ transition:scale .12s ease; }
@@ -211,13 +215,18 @@
   .sb-num{width:38px; text-align:right; font-size:11px; font-weight:700;}
 
   .board-wrap{
-    position:relative; width:100%; min-height:300px; margin:6px 0 14px;
+    position:relative; width:auto;
+    /* break out of the screen's 16px side padding, leaving ~4px at each edge */
+    margin:6px -16px 14px;
+    /* take the free vertical room between the HUD and the power row and centre
+       the hexagon in it (equal auto margins) with a small fixed gap below */
+    margin-top:auto; margin-bottom:auto;
     background:
       repeating-linear-gradient(120deg, rgba(231,184,75,0.05) 0 1px, transparent 1px 26px),
       repeating-linear-gradient(60deg, rgba(231,184,75,0.05) 0 1px, transparent 1px 26px),
       var(--panel);
     border-radius:18px; border:1px solid rgba(231,184,75,0.22);
-    padding:6px; box-shadow:inset 0 0 30px rgba(0,0,0,0.4);
+    padding:4px; box-shadow:inset 0 0 30px rgba(0,0,0,0.4);
   }
   .board{position:relative; width:100%; height:100%;}
   .tile{
@@ -491,7 +500,7 @@
     100%{ opacity:0; scale:1.2; }
   }
 
-  .power-row{display:flex; align-items:center; gap:14px; margin-top:auto;}
+  .power-row{display:flex; align-items:center; gap:14px;}
   .power-ring-btn{
     position:relative; width:74px; height:74px; flex-shrink:0; border-radius:50%; background:transparent;
   }
@@ -1074,13 +1083,25 @@ const HEX_UNIT_BOUNDS = (function(){
 })();
 
 function recalcHexSize(){
-  const availW = boardEl.clientWidth;
+  const PAD = 4; // board-wrap padding on each side
+  // The board fills the wrap's inner width (the full phone width minus ~4px edges).
+  const widthFit = boardWrapEl.clientWidth - PAD*2;
+
+  // The room actually left between the content above the board (story banner /
+  // HUD) and the top of the power row. Both axis limits feed ONE hexSize so the
+  // hexagon never stretches.
+  let prev = boardWrapEl.previousElementSibling;
+  while (prev && prev.getBoundingClientRect().height === 0) prev = prev.previousElementSibling;
+  const slotTop = prev ? prev.getBoundingClientRect().bottom : 0;
+  const slotH = document.querySelector('.power-row').getBoundingClientRect().top - slotTop;
+  const heightFit = slotH - 8; // the wrap height line below adds 8px around the shape
+
   const unitW = (HEX_UNIT_BOUNDS.maxX - HEX_UNIT_BOUNDS.minX) + Math.sqrt(3);
   const unitH = (HEX_UNIT_BOUNDS.maxY - HEX_UNIT_BOUNDS.minY) + 2;
-  hexSize = availW / unitW;
+  hexSize = Math.max(12, Math.min(widthFit / unitW, heightFit / unitH));
   const shapeW = (HEX_UNIT_BOUNDS.maxX - HEX_UNIT_BOUNDS.minX) * hexSize + Math.sqrt(3)*hexSize;
   const shapeH = (HEX_UNIT_BOUNDS.maxY - HEX_UNIT_BOUNDS.minY) * hexSize + 2*hexSize;
-  boardWrapEl.style.height = Math.ceil(shapeH + 12) + 'px'; // +12 matches board-wrap's 6px padding on each side
+  boardWrapEl.style.height = Math.ceil(shapeH + 8) + 'px'; // +8 matches board-wrap's 4px padding on each side
   hexOriginX = -HEX_UNIT_BOUNDS.minX*hexSize + Math.sqrt(3)/2*hexSize;
   hexOriginY = -HEX_UNIT_BOUNDS.minY*hexSize + hexSize;
 }
