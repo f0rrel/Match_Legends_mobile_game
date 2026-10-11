@@ -296,9 +296,11 @@
     will-change:transform;
   }
   /* Settling the sixth turn home (setBoardRotation(..., false)) snaps the board
-     with its transition off; the face must snap with it, or the settled
-     -360deg would unwind as a visible extra spin of the artwork. */
-  #board.rot-snap .tile-face{ transition:none; }
+     with its transition off; the faces and any floating label must snap with it,
+     or a settled -360deg would unwind as a visible extra spin. */
+  #board.rot-snap .tile-face,
+  #board.rot-snap .match-callout,
+  #board.rot-snap .score-pop{ transition:none; }
   /* The monster artwork fills its hexagon and is drawn over the hex background,
      inheriting the tile's own colour through currentColor. */
   .tile-face > svg{
@@ -541,6 +543,13 @@
      centring `translate` underneath is never touched. */
   .match-callout{
     position:absolute; left:50%; top:50%; translate:-50% -50%;
+    /* Counter-rotate the board so the label reads upright, exactly as .tile-face
+       does for tile art. The callout is a child of #board, so it turns with the
+       board; the inverse rotation about its own centre cancels that. It uses the
+       separate `rotate` property, so the centring `translate` and the animation's
+       `scale` are never overwritten and the label stays centred where it was. */
+    rotate:calc(-1 * var(--board-rot, 0deg));
+    transition:rotate 1s cubic-bezier(.45,.05,.35,1);
     font-family:'Cinzel',serif; font-weight:900;
     font-size:clamp(18px, 6.4vw, 30px); line-height:1.1;
     color:var(--gold-bright); padding:6px 16px; border-radius:999px;
@@ -661,7 +670,11 @@
   .score-pop{
     position:absolute; transform:translate(-50%,-50%); font-family:'Cinzel',serif; font-weight:800;
     font-size:15px; color:var(--gold-bright); text-shadow:0 2px 6px rgba(0,0,0,0.75);
-    pointer-events:none; opacity:1; transition:transform .8s ease, opacity .8s ease; z-index:5;
+    pointer-events:none; opacity:1; transition:transform .8s ease, opacity .8s ease, rotate 1s cubic-bezier(.45,.05,.35,1); z-index:5;
+    /* Same upright-facing rule as the match callout: counter-rotate the board on
+       the separate `rotate` property, leaving the `transform` that both centres
+       the score and drives its rise untouched. */
+    rotate:calc(-1 * var(--board-rot, 0deg));
   }
   .score-pop.rise{ transform:translate(-50%,-170%); opacity:0; }
 
