@@ -1,24 +1,26 @@
-# Pending task acceptance tests
+# Task acceptance tests
 
-**Every test in this directory is EXPECTED TO FAIL** until its task is done. Each one is
-the human-written definition of done for one planned task, written before the work
-starts. `npm test` does **not** run them; `npm run test:tasks` does.
+Each file here is the human-written definition of done for one `ml-*` task, written
+before the work started. Files are named `ml-<id>-<slug>.test.js` (pure logic, run
+with `node:test`) or `ml-<id>-<slug>.spec.js` (browser behaviour, run with
+Playwright). A few tasks have both.
 
-| File(s) | Task |
-| --- | --- |
-| `ml-1-seeded-rng.test.js` | ml-1: `MatchLogic.createRng(seed)` |
-| `ml-2-shuffle.test.js` | ml-2: `MatchLogic.shuffleBoard(board, rng)` |
-| `ml-3-scoring.test.js` | ml-3: `MatchLogic.scoreMatch({...})` |
-| `ml-4-hint.test.js`, `ml-4-hint.spec.js` | ml-4: `MatchLogic.findHint(board)` and the 💡 button |
-| `ml-5-persist.spec.js` | ml-5: progress persists in `localStorage` |
-| `ml-6-resume-level.spec.js` | ml-6: an unfinished level survives closing and reopening the game |
-| `ml-7-debug-panel.spec.js` | ml-7: a debug panel with `?debug=1` (seed, stuck board, saved progress, any level) |
-| `ml-8-stars.test.js`, `ml-8-stars.spec.js` | ml-8: a 0-3 star rating on the results screen |
+```bash
+npm test           # does NOT run this directory
+npm run test:tasks # runs it: 90 node tests + 50 Playwright tests
+```
 
-Status (2026-10-05): ml-1 to ml-5 are done and integrated, so their tests now pass;
-moving them into `tests/unit/` and `tests/smoke/` is a human decision. ml-6 to ml-8 are
-pending.
+**Status (2026-10-08): all tests in this directory pass** — 90 node tests and 50
+Playwright tests, 0 failures. The tasks they cover are implemented, so these no
+longer read as pending work. They are kept here rather than in `tests/unit/` and
+`tests/smoke/` so that `npm test` stays a fast gate; moving one into `npm test` is a
+human decision.
 
-The tasks are independent: none needs another's code. When a task is done, its test
-moves from here to `tests/unit/` or `tests/smoke/` (a human decision), so that it
-becomes part of `npm test`.
+Coverage in brief:
+
+- `ml-1` … `ml-8` — seeded RNG, shuffle, scoring, hint, persistence, resume, debug
+  panel, star rating.
+- `ml-9` … `ml-29` — effects toggle, clear pop, win burst, tile colours, wobble,
+  monster artwork, match beat, callouts, cascade timing, burst classes.
+- `ml-30` … `ml-45` — queued swipes, special encoding, matching, planting, blasts,
+  chains, special look and burst, and combining two specials.

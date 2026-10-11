@@ -85,6 +85,10 @@
   .screen{display:none; flex-direction:column; flex:1; padding:18px 16px 28px;}
   .screen.active{display:flex; animation:screenIn .22s cubic-bezier(.34,1.4,.64,1);}
   @keyframes screenIn{ 0%{ opacity:0; scale:0.97; } 100%{ opacity:1; scale:1; } }
+  /* The board now spans the phone edge-to-edge, so the game screen fades in
+     without the column-wide zoom that would inset it for the first frames. */
+  #screen-game.active{ animation:gameScreenIn .22s ease; }
+  @keyframes gameScreenIn{ 0%{ opacity:0; } 100%{ opacity:1; } }
 
   .backbtn, .gemcount, .menu-btn, .avatar-strip, .avatar-card, .level-card:not(.locked),
   .power-ring-btn, .hint-btn, .btn, .unlockbtn{ transition:scale .12s ease; }
@@ -211,15 +215,54 @@
   .sb-num{width:38px; text-align:right; font-size:11px; font-weight:700;}
 
   .board-wrap{
-    position:relative; width:100%; min-height:300px; margin:6px 0 14px;
+    position:relative; width:auto;
+    /* break out of the screen's 16px side padding, leaving ~4px at each edge */
+    margin:6px -16px 14px;
+    /* take the free vertical room between the HUD and the power row and centre
+       the hexagon in it (equal auto margins) with a small fixed gap below */
+    margin-top:auto; margin-bottom:auto;
     background:
       repeating-linear-gradient(120deg, rgba(231,184,75,0.05) 0 1px, transparent 1px 26px),
       repeating-linear-gradient(60deg, rgba(231,184,75,0.05) 0 1px, transparent 1px 26px),
       var(--panel);
     border-radius:18px; border:1px solid rgba(231,184,75,0.22);
-    padding:6px; box-shadow:inset 0 0 30px rgba(0,0,0,0.4);
+    padding:4px; box-shadow:inset 0 0 30px rgba(0,0,0,0.4);
+    /* the board turns about its centre; never clip a corner of a turned hex */
+    overflow:visible;
   }
   .board{position:relative; width:100%; height:100%;}
+  /* ==== ML-53 / ML-56: board rotor ====
+     The board carries its orientation in data-rot ('0'..'5', 0 = upright) and
+     turns anticlockwise to the matching --board-rot angle, one Hex side (60°)
+     per step: 0 → -60 → -120 → -180 → -240 → -300. The angle is the real
+     displacement, never its modulo-360 twin: CSS animates the number it is
+     handed, so -60 covers 60° anticlockwise in a second while the equivalent
+     +300 would crawl the long way round clockwise. Every side has a resting
+     angle, so repeated triggers keep advancing instead of running out after
+     60°. '6' is the sixth turn landing on a full turn (-360deg, which looks
+     exactly like 0deg); the script swaps it for '0' with the transition off,
+     so the cycle comes home anticlockwise instead of spinning 300° back. It
+     turns about its own centre (transform-origin 50% 50%), so the board's
+     centre point never moves and the HUD, story banner, topbar and power row
+     -- siblings outside #board -- stay upright and unshifted. No rule ever
+     takes --board-rot back to upright once the transition ends: data-rot N
+     always shows the board turned 60*N degrees anticlockwise and it stays. The
+     turn takes about a second (1000ms) with a gentle ease, so the eye catches
+     the whole beat instead of the old half-second flick. The parent .board-wrap
+     is overflow:visible so the turned board is never clipped. The global
+     reduced-motion rule below collapses the 1s transition to a snap. */
+  #board{
+    transform:rotate(var(--board-rot, 0deg));
+    transform-origin:50% 50%;
+    transition:transform 1s cubic-bezier(.45,.05,.35,1);
+  }
+  #board[data-rot="0"]{ --board-rot:0deg; }
+  #board[data-rot="1"]{ --board-rot:-60deg; }
+  #board[data-rot="2"]{ --board-rot:-120deg; }
+  #board[data-rot="3"]{ --board-rot:-180deg; }
+  #board[data-rot="4"]{ --board-rot:-240deg; }
+  #board[data-rot="5"]{ --board-rot:-300deg; }
+  #board[data-rot="6"]{ --board-rot:-360deg; }
   .tile{
     position:absolute; display:flex; align-items:center; justify-content:center;
     font-size:min(5.6vw, 24px);
@@ -233,12 +276,65 @@
     touch-action:none;
     user-select:none;
   }
+  /* ==== upright tile faces ====
+     The board turns as one object, so a tile's own artwork would turn with it.
+     The face wraps the monster svg and the special mark and counter-rotates by
+     the board's angle, read straight from the same --board-rot custom property
+     #board turns by: the board rests on rotate(-60deg) while the face rests on
+     rotate(+60deg), so the two cancel and the artwork, symbol and mark stay
+     upright on screen. It is a plain layer over the tile -- inset:0, so it never
+     nudges the tile's hex position or the script's `translate` -- and it inherits
+     --board-rot from #board, so no separate counter is kept and the two can
+     never drift. It shares the board's 1s ease, so the counter-turn runs in
+     step with the turn; the global reduced-motion rule collapses both to a snap. */
+  .tile-face{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    transform:rotate(calc(-1 * var(--board-rot, 0deg)));
+    transform-origin:50% 50%;
+    transition:transform 1s cubic-bezier(.45,.05,.35,1);
+    will-change:transform;
+  }
+  /* Settling the sixth turn home (setBoardRotation(..., false)) snaps the board
+     with its transition off; the faces and any floating label must snap with it,
+     or a settled -360deg would unwind as a visible extra spin. */
+  #board.rot-snap .tile-face,
+  #board.rot-snap .match-callout,
+  #board.rot-snap .score-pop{ transition:none; }
   /* The monster artwork fills its hexagon and is drawn over the hex background,
      inheriting the tile's own colour through currentColor. */
-  .tile > svg{
+  .tile-face > svg{
     width:100%; height:100%; display:block;
     position:relative; z-index:1;
     pointer-events:none;
+  }
+  /* ==== ML-43: special marks ====
+     A special tile carries data-special ("line"/"bomb") and a sibling mark next
+     to the monster svg. The tile is a flex row whose svg is width:100%, so a
+     plain child would collapse to zero width; the mark is taken out of flow and
+     pinned over the hexagon instead. It sits above the svg (z-index:2) so the
+     hexagon clip-path does not hide it, and never eats a tap. */
+  .special-mark{
+    position:absolute;
+    inset:auto 9% 9% auto;
+    width:40%; height:40%;
+    box-sizing:border-box;
+    pointer-events:none;
+    z-index:2;
+  }
+  /* Line: a bright gold elongated bar, tilted so it reads as a streak. */
+  .tile[data-special="line"] > .tile-face > .special-mark{
+    background:linear-gradient(145deg, #FFF3B0 0%, #E7B84B 52%, #A9781A 100%);
+    border:2px solid #2E2200;
+    box-shadow:0 0 7px 2px rgba(231,184,75,0.95);
+    transform:rotate(-28deg) scaleY(1.5);
+  }
+  /* Bomb: a round crimson flash, no tilt, so the two never look alike. */
+  .tile[data-special="bomb"] > .tile-face > .special-mark{
+    background:radial-gradient(circle at 40% 36%, #FFD6D6 0%, #E23B3B 46%, #8E1212 100%);
+    border:2px solid #FFFFFF;
+    box-shadow:0 0 8px 2px rgba(226,59,59,0.95);
+    transform:none;
   }
   /* ==== ML-JUICE: idle wobble ====
      A gentle rock, so a still board breathes instead of sitting like one slab.
@@ -250,23 +346,18 @@
      tiles are out of step. It is set once, at creation, because re-timing a
      running animation would make the tile jump when gravity moves it.
 
-     Two gates:
-     reduced motion — the .tile rule exists only inside
-     prefers-reduced-motion: no-preference, so a player who asked for less
-     motion never gets an animation at all. The global rule further down only
-     shortens durations and would leave the animation named, so it is not
-     relied on here;
-     effects off — '.idle-off .tile' below, wearing a class that
-     updateEffectsToggle() puts on and takes off the body.
+     One gate: the shared effects switch — '.idle-off .tile' below, wearing a
+     class that updateEffectsToggle() puts on and takes off the body. The switch
+     starts off when the OS asks for reduced motion (see the effects switch block),
+     but a player who turns effects on gets the wobble even then: the switch is the
+     authority, not the media query.
 
      These rules sit above .tile.hint and .tile.matchPop on purpose: equal
      specificity, so the later rules win and hint and pop keep overriding the
      wobble exactly as they always took an animation over. */
-  @media (prefers-reduced-motion: no-preference){
-    .tile{
-      animation:idleWobble 2.6s ease-in-out infinite;
-      animation-delay:var(--wobble-delay, 0s);
-    }
+  .tile{
+    animation:idleWobble 2.6s ease-in-out infinite;
+    animation-delay:var(--wobble-delay, 0s);
   }
   .idle-off .tile{ animation:none; }
   @keyframes idleWobble{
@@ -390,6 +481,39 @@
     25%{ scale:1.25; opacity:1; filter:brightness(2.8) drop-shadow(0 0 12px var(--gold-bright)); animation-timing-function:ease-in; }
     100%{ scale:0; opacity:0; filter:brightness(2.2) drop-shadow(0 0 5px var(--gold-bright)); }
   }
+  /* ==== ML-JUICE: special bursts ====
+     A special that fires bursts in its own way, so the player can tell which one
+     went off and what it did. Each kind wears data-special (set on the tile when
+     it is created) and gets a rule written after the per-monster and burst pops
+     above -- and repeated with [data-type] (0,4,0), the same trick the bursts
+     use -- so it always beats the ordinary monster pop (0,3,0) of whichever
+     monster carries it. Both end on scale:0 with opacity:0, so the tile still
+     visibly leaves the board, both move only scale/rotate/opacity/filter (never
+     translate, which belongs to the hex positioning), and both stay well under
+     the 1 s cap: 440ms and 500ms, inside the 560ms huge-burst reference and the
+     MATCH_POP_BACKSTOP_MS / MAX_POP_MS guards. The filter list is the same
+     brightness + drop-shadow shape at every stop so the flash and glow ramp
+     smoothly (drop-shadow glows through the hex clip-path, box-shadow does not). */
+  /* line blaster -- a quick bright slash: the tile stretches thin along the line
+     it clears, flashes hard, and is gone. */
+  .tile.matchPop[data-special="line"],
+  .tile.matchPop[data-special="line"][data-type]{ animation:popSpecialLine .44s ease-out forwards; }
+  @keyframes popSpecialLine{
+    0%{ scale:1; rotate:0deg; opacity:1; filter:brightness(1) drop-shadow(0 0 0 transparent); }
+    22%{ scale:0.36 1.55; rotate:-10deg; opacity:1; filter:brightness(3.4) drop-shadow(0 0 16px var(--gold-bright)); }
+    56%{ scale:0.22 1.7; rotate:-5deg; opacity:0.85; filter:brightness(2.5) drop-shadow(0 0 12px var(--gold-bright)); }
+    100%{ scale:0; rotate:0deg; opacity:0; filter:brightness(2.1) drop-shadow(0 0 6px var(--gold-bright)); }
+  }
+  /* colour bomb -- a round flash: it swells outward in every direction, holds a
+     beat, then folds back to nothing. */
+  .tile.matchPop[data-special="bomb"],
+  .tile.matchPop[data-special="bomb"][data-type]{ animation:popSpecialBomb .5s ease-out forwards; }
+  @keyframes popSpecialBomb{
+    0%{ scale:0.9; opacity:1; filter:brightness(1) drop-shadow(0 0 0 transparent); }
+    32%{ scale:1.75; opacity:1; filter:brightness(3.1) drop-shadow(0 0 18px var(--gold-bright)); }
+    62%{ scale:1.42; opacity:0.9; filter:brightness(2.5) drop-shadow(0 0 14px var(--gold-bright)); }
+    100%{ scale:0; opacity:0; filter:brightness(2.1) drop-shadow(0 0 6px var(--gold-bright)); }
+  }
   .tile.spawning{ opacity:0; scale:0.3; }
 
   .power-flash{
@@ -414,6 +538,13 @@
      centring `translate` underneath is never touched. */
   .match-callout{
     position:absolute; left:50%; top:50%; translate:-50% -50%;
+    /* Counter-rotate the board so the label reads upright, exactly as .tile-face
+       does for tile art. The callout is a child of #board, so it turns with the
+       board; the inverse rotation about its own centre cancels that. It uses the
+       separate `rotate` property, so the centring `translate` and the animation's
+       `scale` are never overwritten and the label stays centred where it was. */
+    rotate:calc(-1 * var(--board-rot, 0deg));
+    transition:rotate 1s cubic-bezier(.45,.05,.35,1);
     font-family:'Cinzel',serif; font-weight:900;
     font-size:clamp(18px, 6.4vw, 30px); line-height:1.1;
     color:var(--gold-bright); padding:6px 16px; border-radius:999px;
@@ -430,7 +561,7 @@
     100%{ opacity:0; scale:1.2; }
   }
 
-  .power-row{display:flex; align-items:center; gap:14px; margin-top:auto;}
+  .power-row{display:flex; align-items:center; gap:14px;}
   .power-ring-btn{
     position:relative; width:74px; height:74px; flex-shrink:0; border-radius:50%; background:transparent;
   }
@@ -482,9 +613,9 @@
      the screen is shown, and is over before anyone can read the score.
 
      The loss state has no rule here at all, so a loss looks exactly as it always
-     did. The two rules below are the only ways the burst is ever taken away again:
-     'no-burst', worn when the shared effects switch is off, and reduced motion —
-     both put there by the script at the bottom of this file. */
+     did. The one rule below is the only way the burst is ever taken away again:
+     'no-burst', worn when the shared effects switch is off (including the
+     reduced-motion default), put there by the script at the bottom of this file. */
   .results-screen{ position:relative; }
   .results-screen::before{
     content:''; position:absolute; inset:-18%; z-index:-1; border-radius:50%;
@@ -503,15 +634,16 @@
     35%{ opacity:.85; }
     100%{ opacity:0; }
   }
-  /* No burst on a loss, and none when the state class is worn with 'no-burst'. */
+  /* No burst on a loss, and none when the effects switch is off ('no-burst' is set
+     by the script; body.idle-off covers a burst read straight off the CSS while
+     effects are off, including the reduced-motion default). Turning effects on
+     plays it even under reduced motion: the switch is the authority. */
+  body.idle-off .results-screen.win,
+  body.idle-off .results-screen.win::before,
   .results-screen.lose,
   .results-screen.lose::before,
   .results-screen.no-burst,
   .results-screen.no-burst::before{ animation:none; }
-  @media (prefers-reduced-motion: reduce){
-    .results-screen.win,
-    .results-screen.win::before{ animation:none; }
-  }
 
   .btn{
     padding:14px; border-radius:12px; font-weight:800; font-family:'Cinzel',serif; font-size:14.5px; text-align:center;
@@ -527,14 +659,22 @@
   }
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 
+  /* The one place the OS reduced-motion preference still bites: while the shared
+     effects switch is OFF ('.idle-off' on the body, which is its default value
+     under reduced motion), collapse whatever is left of the motion to a snap. Once
+     the player turns effects ON the switch wins and everything runs at full speed. */
   @media (prefers-reduced-motion: reduce){
-    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+    body.idle-off *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
   }
 
   .score-pop{
     position:absolute; transform:translate(-50%,-50%); font-family:'Cinzel',serif; font-weight:800;
     font-size:15px; color:var(--gold-bright); text-shadow:0 2px 6px rgba(0,0,0,0.75);
-    pointer-events:none; opacity:1; transition:transform .8s ease, opacity .8s ease; z-index:5;
+    pointer-events:none; opacity:1; transition:transform .8s ease, opacity .8s ease, rotate 1s cubic-bezier(.45,.05,.35,1); z-index:5;
+    /* Same upright-facing rule as the match callout: counter-rotate the board on
+       the separate `rotate` property, leaving the `transform` that both centres
+       the score and drives its rise untouched. */
+    rotate:calc(-1 * var(--board-rot, 0deg));
   }
   .score-pop.rise{ transform:translate(-50%,-170%); opacity:0; }
 
@@ -750,9 +890,9 @@ const TILE_ICONS = { sword:'⚔️', shield:'🛡️', urn:'🏺', crown:'👑',
 // Pure game logic (hex grid, matching, gravity, power targeting) lives in
 // www/js/match-logic.js so it can be unit tested.
 const {
-  BASE_POINTS, TYPES, hexKey, HEX_CELLS, QCOLUMNS_BY_Q,
+  BASE_POINTS, TYPES, hexKey, HEX_CELLS,
   isHexAdjacent, swapHex, createRng,
-  findMatches, hasPossibleMove, createPlayableBoard, computeCollapse, findHint, starsForScore,
+  findMatches, hasPossibleMove, createPlayableBoard, computeCollapse, gravityForStep, findHint, starsForScore,
 } = window.MatchLogic;
 
 const AVATARS = [
@@ -1013,13 +1153,25 @@ const HEX_UNIT_BOUNDS = (function(){
 })();
 
 function recalcHexSize(){
-  const availW = boardEl.clientWidth;
+  const PAD = 4; // board-wrap padding on each side
+  // The board fills the wrap's inner width (the full phone width minus ~4px edges).
+  const widthFit = boardWrapEl.clientWidth - PAD*2;
+
+  // The room actually left between the content above the board (story banner /
+  // HUD) and the top of the power row. Both axis limits feed ONE hexSize so the
+  // hexagon never stretches.
+  let prev = boardWrapEl.previousElementSibling;
+  while (prev && prev.getBoundingClientRect().height === 0) prev = prev.previousElementSibling;
+  const slotTop = prev ? prev.getBoundingClientRect().bottom : 0;
+  const slotH = document.querySelector('.power-row').getBoundingClientRect().top - slotTop;
+  const heightFit = slotH - 8; // the wrap height line below adds 8px around the shape
+
   const unitW = (HEX_UNIT_BOUNDS.maxX - HEX_UNIT_BOUNDS.minX) + Math.sqrt(3);
   const unitH = (HEX_UNIT_BOUNDS.maxY - HEX_UNIT_BOUNDS.minY) + 2;
-  hexSize = availW / unitW;
+  hexSize = Math.max(12, Math.min(widthFit / unitW, heightFit / unitH));
   const shapeW = (HEX_UNIT_BOUNDS.maxX - HEX_UNIT_BOUNDS.minX) * hexSize + Math.sqrt(3)*hexSize;
   const shapeH = (HEX_UNIT_BOUNDS.maxY - HEX_UNIT_BOUNDS.minY) * hexSize + 2*hexSize;
-  boardWrapEl.style.height = Math.ceil(shapeH + 12) + 'px'; // +12 matches board-wrap's 6px padding on each side
+  boardWrapEl.style.height = Math.ceil(shapeH + 8) + 'px'; // +8 matches board-wrap's 4px padding on each side
   hexOriginX = -HEX_UNIT_BOUNDS.minX*hexSize + Math.sqrt(3)/2*hexSize;
   hexOriginY = -HEX_UNIT_BOUNDS.minY*hexSize + hexSize;
 }
@@ -1041,17 +1193,33 @@ function idleWobbleDelay(q, r){
   const n = ((Number(q) || 0) * 7 + (Number(r) || 0) * 3) % STEPS;
   return (((n % STEPS) + STEPS) % STEPS * STEP_S).toFixed(2) + 's';
 }
+// The one place a tile's contents are painted: the monster svg, plus the
+// special mark when the tile carries a special. The mark is a sibling element,
+// never part of the artwork, so the monster still draws exactly its own paths.
+// Both live inside the tile-face layer, which counter-rotates against the board
+// so the artwork and mark stay upright while the board turns.
+function setTileContent(el, type, special){
+  const face = document.createElement('div');
+  face.className = 'tile-face';
+  face.innerHTML = MonsterTiles.monsterTileSVG(type);
+  if (special){
+    const mark = document.createElement('div');
+    mark.className = 'special-mark';
+    face.appendChild(mark);
+  }
+  el.replaceChildren(face);
+}
 function tileEl(type, q, r, key){
   const d = document.createElement('div');
   d.className = 'tile';
   // The board stores a special as 'monster+kind'; the artwork and the colour
   // rules key off the monster half only, the kind is marked separately.
   const base = MatchLogic.baseType(type);
-  d.innerHTML = MonsterTiles.monsterTileSVG(base);
   // data-type is what the tile colour rules in the CSS key off.
   d.dataset.q = q; d.dataset.r = r; d.dataset.key = key; d.dataset.type = base;
   const special = MatchLogic.specialOf(type);
   if (special) d.dataset.special = special;
+  setTileContent(d, base, special);
   // Only the idle wobble reads this; it changes nothing else about the tile.
   d.style.setProperty('--wobble-delay', idleWobbleDelay(q, r));
   positionHexTile(d, q, r);
@@ -1256,6 +1424,39 @@ async function loadSavedSession(){
   updateContinueButton();
 }
 
+// ML-54: the board's orientation step lives on the session (0..5, 0 upright)
+// and is mirrored onto #board as data-rot, which is what the CSS turns by. A
+// level always starts and replays upright, and the step is never read from or
+// written to saved progress: only a settled match that earned a line or bomb
+// special ever advances it.
+// data-rot is stepped with the transition switched off, so putting the board
+// upright again lands it there at once instead of unwinding the last side (or
+// a whole -360deg cycle) in front of the player. A forced reflow in between
+// lets the browser commit the angle while the transition is off, so the next
+// turn animates as usual.
+function setBoardRotation(rot, animate){
+  const rotor = document.getElementById('board');
+  if (!animate){
+    const held = rotor.style.transition;
+    rotor.style.transition = 'none';
+    // The tile faces carry their own transition, so snap them too: with
+    // rot-snap on, a settled -360deg face lands on 0deg at once instead of
+    // unwinding a whole extra turn of the artwork.
+    rotor.classList.add('rot-snap');
+    rotor.dataset.rot = rot;
+    void rotor.offsetWidth;
+    rotor.classList.remove('rot-snap');
+    rotor.style.transition = held;
+    return;
+  }
+  rotor.dataset.rot = rot;
+}
+
+function resetBoardRotation(){
+  if (session) session.rotStep = 0;
+  setBoardRotation('0', false);
+}
+
 // Begin a solo level. `saved` is a record from 'ml_session': it resumes the
 // interrupted attempt exactly as it was left; without one a fresh board is dealt
 // from `seed`, or from the pinned/random seed when none is given.
@@ -1273,6 +1474,7 @@ function startSoloLevel(levelId, saved, seed){
     score: resumed ? saved.score : 0,
     movesLeft: resumed ? saved.movesLeft : lvl.moves,
     charge: resumed ? saved.charge : 0,
+    rotStep: 0,
     elMap:null, busy:false, selected:null,
     scoreBuffUses:0, scoreBuffMult:1, chargeBuffUses:0, chargeBuffMult:1
   };
@@ -1280,6 +1482,9 @@ function startSoloLevel(levelId, saved, seed){
   document.getElementById('battle-hud').style.display = 'none';
   document.getElementById('game-title').textContent = chapterTitle;
   showStoryBanner({ chapter: chapterTitle, blurb: lvl.story.blurb });
+  // Reset while screen-game is still hidden, so a replayed level snaps upright
+  // instead of visibly turning back from the previous level's angle.
+  resetBoardRotation();
   goto('screen-game');
   requestAnimationFrame(()=>{
     session.elMap = freshRenderBoard(session.board);
@@ -1297,6 +1502,7 @@ function startBattle(){
     mode:'battle', seed, board:createPlayableBoard(createRng(seed)), score:0, aiScore:0, timeLeft:BATTLE_SECONDS,
     charge:0, elMap:null, busy:false, selected:null, opp,
     aiTimer:null, clockTimer:null, ended:false,
+    rotStep:0,
     scoreBuffUses:0, scoreBuffMult:1, chargeBuffUses:0, chargeBuffMult:1
   };
   document.getElementById('solo-hud').style.display = 'none';
@@ -1305,6 +1511,8 @@ function startBattle(){
   document.getElementById('battle-ai-name').textContent = opp.icon + ' ' + opp.name;
   document.getElementById('battle-target').textContent = BATTLE_TARGET;
   showStoryBanner(null);
+  // Reset while screen-game is still hidden, so a fresh battle starts upright.
+  resetBoardRotation();
   goto('screen-game');
   requestAnimationFrame(()=> showToast(`${opp.icon} ${opp.name} enters the arena!`));
   requestAnimationFrame(()=>{
@@ -1398,14 +1606,9 @@ function updatePowerUI(){
 /* =========================================================
    BOARD INTERACTION (swipe to swap)
 ========================================================= */
-// A swipe's screen-pixel angle maps to one of the 6 hex directions (60° apart).
-const HEX_SWIPE_DIRS = [ [1,0], [0,1], [-1,1], [-1,0], [0,-1], [1,-1] ]; // at 0,60,120,180,240,300 deg
-function angleToHexDir(dx,dy){
-  let angle = Math.atan2(dy,dx) * 180/Math.PI;
-  if (angle<0) angle += 360;
-  const idx = Math.round(angle/60) % 6;
-  return HEX_SWIPE_DIRS[idx];
-}
+// A swipe is read in the orientation the player sees: the logic module folds the
+// screen-pixel angle through the board's current turn (session.rotStep) and owns
+// the one canonical copy of the six hex directions.
 function bindBoardEvents(){
   let start = null;
   boardEl.onpointerdown = (e)=>{
@@ -1419,7 +1622,7 @@ function bindBoardEvents(){
     const s = start; start = null;
     const dx = e.clientX - s.x, dy = e.clientY - s.y;
     if (Math.hypot(dx,dy) < 18) return;
-    const [dq,dr] = angleToHexDir(dx,dy);
+    const [dq,dr] = MatchLogic.swipeDirForStep(dx, dy, session.rotStep);
     const target = { q:s.q+dq, r:s.r+dr };
     if (!(hexKey(target.q,target.r) in session.board)) return;
     // Busy board: remember this swipe as the one waiting one (the most recent
@@ -1442,11 +1645,15 @@ async function attemptSwap(a, b){
   const typeB = session.board[kb];
   swapHex(session.board, a, b);
   const matched = findMatches(session.board);
-  // A colour bomb swapped with anything is a legal move even when it makes no
-  // match: it clears with its own blast instead of matching, so the swap is
-  // never reverted. A plain tile still needs a match to go through.
-  const bombBlast = matched.size === 0 ? MatchLogic.bombSwapBlast(session.board, a, b) : null;
-  if (matched.size === 0 && !bombBlast){
+  // Two specials swapped together are a legal move even when they make no
+  // match: they combine into a bigger blast (line blasters take both axes, a
+  // colour bomb takes both monsters) instead of matching. Otherwise a colour
+  // bomb swapped with a plain tile still clears with its own blast as before.
+  // A plain tile still needs a match to go through.
+  const combineBlast = matched.size === 0 ? MatchLogic.combineSwapBlast(session.board, a, b) : null;
+  const bombBlast = (matched.size === 0 && !combineBlast) ? MatchLogic.bombSwapBlast(session.board, a, b) : null;
+  const noMatchBlast = combineBlast || bombBlast;
+  if (matched.size === 0 && !noMatchBlast){
     swapHex(session.board, a, b); // revert data
     Sound.swapInvalid();
     await animateSwap(a,b, true); // visual swap-and-back
@@ -1467,7 +1674,7 @@ async function attemptSwap(a, b){
   // findMatches attached to the match rides along on the grown set.
   let expanded;
   if (matched.size === 0){
-    expanded = bombBlast;
+    expanded = noMatchBlast;
   } else {
     const baseA = MatchLogic.baseType(typeA);
     const baseB = MatchLogic.baseType(typeB);
@@ -1481,7 +1688,23 @@ async function attemptSwap(a, b){
     expanded.runLen = matched.runLen;
     expanded.burstClass = matched.burstClass;
   }
-  await resolveCascade(expanded, 1);
+  // Preserve the original match shape before special blasts expand the clear.
+  // Power-only clears must not earn rotation just because they hit 4+ cells.
+  expanded.rotationShape = matched.size > 0
+    ? MatchLogic.matchShape(matched)
+    : null;
+  // Which special the player's own swap earned, read from the first match set
+  // alone (the one findMatches() returned, before special blasts grow it), so a
+  // power's clear and the later cascade steps can never name one. resolveCascade
+  // holds that cell in place while it runs; the match itself is still scored and
+  // counted whole.
+  const earnedSpecial = (matched.size > 0 && window.MatchLogic
+    && typeof window.MatchLogic.matchShape === 'function')
+    ? playerSpecialTarget(matched, a, b) : null;
+  await resolveCascade(expanded, 1, earnedSpecial ? earnedSpecial.key : null);
+  // The cascade has settled: the held cell becomes the special the match earned
+  // and its tile is repainted, all before the move is counted.
+  plantPlayerSpecial(earnedSpecial);
   if (session.mode === 'solo'){
     session.movesLeft -= 1;
     updateSoloHud();
@@ -1522,7 +1745,9 @@ function swipeStillMatches(swipe){
   if (!isHexAdjacent(a,b)) return false;
   const probe = { ...session.board };
   swapHex(probe, a, b);
-  // A colour bomb swapped with anything is legal with or without a match.
+  // Two specials swapped together / a colour bomb swapped with anything are
+  // legal with or without a match.
+  if (MatchLogic.combineSwapBlast(probe, a, b)) return true;
   if (MatchLogic.bombSwapBlast(probe, a, b)) return true;
   return findMatches(probe).size > 0;
 }
@@ -1557,16 +1782,88 @@ async function animateSwap(a,b, revert){
   elB.dataset.q = a.q; elB.dataset.r = a.r;
 }
 
-async function resolveCascade(firstMatch, comboStart){
+// Which special, if any, the player's own match earned, and the cell it belongs
+// on. Read from the first match set alone -- before special blasts grow it -- so
+// a power's clear and the later cascade steps can never name one: a plain
+// 3-match (or anything that is not a straight run of 4+) returns null, a run of
+// 4 a 'line', a run of 5+ a 'bomb'. The anchor is the swapped cell the match
+// covers, so the special appears where the thumb played.
+function playerSpecialTarget(firstMatched, a, b){
+  const ML = window.MatchLogic;
+  if (!ML || typeof ML.matchShape !== 'function' || typeof ML.specialAnchor !== 'function') return null;
+  const kind = ML.matchShape(firstMatched);
+  if (!kind) return null;
+  const anchor = ML.specialAnchor(session.board, firstMatched, a, b);
+  if (!anchor || typeof anchor.q !== 'number' || typeof anchor.r !== 'number') return null;
+  const key = hexKey(anchor.q, anchor.r);
+  if (!(key in session.board)) return null;
+  return { kind, key };
+}
+
+// Put the earned special on the board once the cascade has settled. The held
+// tile -- its monster kept alive by resolveCascade -- becomes that monster plus
+// the kind, and the tile element is repainted so the board and what is drawn on
+// it agree. Nothing is planted when the match earned nothing.
+function plantPlayerSpecial(target){
+  if (!target) return null;
+  const ML = window.MatchLogic;
+  if (!ML || typeof ML.plantSpecial !== 'function') return null;
+  const planted = ML.plantSpecial(session.board, target.key, target.kind);
+  if (!planted) return null;
+  const el = session.elMap[target.key];
+  if (el){
+    const monster = ML.baseType(session.board[target.key]);
+    el.dataset.type = monster;
+    el.dataset.special = target.kind;
+    setTileContent(el, monster, target.kind);
+  }
+  return planted;
+}
+
+// The held cell rides through the fall as a survivor, but computeCollapse()
+// packs each line down toward its bottom end: a survivor above a gap would slide
+// one cell and leave the player's own cell to whatever fell in from above. The
+// plan is re-pointed so the held tile keeps its own cell and the tile that was
+// going to land there takes the held tile's place; the two board values the
+// plan just wrote are swapped to match.
+function pinHeldCell(plan, board, key){
+  const [q, r] = key.split(',').map(Number);
+  const held = plan.find(p => p.from && hexKey(p.from.q, p.from.r) === key);
+  if (!held || (held.to.q === q && held.to.r === r)) return;
+  const displaced = plan.find(p => p.to && hexKey(p.to.q, p.to.r) === key && p !== held);
+  if (!displaced) return;
+  const landing = { q: held.to.q, r: held.to.r };
+  held.to = { q, r };
+  displaced.to = landing;
+  const heldKey = hexKey(q, r);
+  const otherKey = hexKey(landing.q, landing.r);
+  const tmp = board[heldKey];
+  board[heldKey] = board[otherKey];
+  board[otherKey] = tmp;
+}
+
+async function resolveCascade(firstMatch, comboStart, heldKey){
   cascadeBeats = [];
   lastCascadeRecord = [];
   let matched = firstMatch;
   let combo = comboStart;
+  // ML-54: whether any clearing step of THIS cascade earned a turn. A step earns
+  // it when its own match shape is a line or a bomb -- a straight run of 4 or
+  // more in the original match, read before any special blast grows the clear.
+  // The grown clear of a power detonation carries no shape (rotationShape null),
+  // so a power alone never earns a turn. It only turns the board once the whole
+  // cascade has settled -- after the loop and reshuffleIfStuck() below -- never
+  // mid-cascade, and a plain 3-match leaves it false.
+  let turnEarned = false;
   while (matched.size > 0){
     // score
     const av = selectedAvatar();
     let maxRun = 3;
     matched.forEach(key=>{ maxRun = Math.max(maxRun, (matched.runLen && matched.runLen[key]) || 3); });
+    const rotationShape = Object.prototype.hasOwnProperty.call(matched, 'rotationShape')
+      ? matched.rotationShape
+      : MatchLogic.matchShape(matched);
+    if (rotationShape === 'line' || rotationShape === 'bomb') turnEarned = true;
     // The beat this clearing step plays, straight from the logic's table: the
     // tiles swell, then pop, and only then may the board start falling.
     const beat = window.MatchLogic.matchBeat(maxRun);
@@ -1603,13 +1900,16 @@ async function resolveCascade(firstMatch, comboStart){
     // swell (the bigger moment of a 4+ match) is held first; a player who asked
     // for reduced motion or turned effects off skips it and the burst entirely
     // (no animation to wait for), so those steps only ever wait one frame.
+    // The held cell (the one the player's special is planted on) never pops and
+    // never reaches the collapse as a gap, so it is taken out of the clearing
+    // set here. The score above already counted the whole match. A cleared
+    // special keeps its data-special so its own burst can play (the tile is
+    // removed by the collapse, so the mark never outlives it).
+    const clearing = heldKey ? new Set([...matched].filter(key => key !== heldKey)) : matched;
     const clearedEls = [];
-    matched.forEach(key=>{
+    clearing.forEach(key=>{
       const el = session.elMap[key];
-      if (el){
-        delete el.dataset.special; // a cleared special keeps no stale mark
-        clearedEls.push(el);
-      }
+      if (el) clearedEls.push(el);
     });
     const motionWanted = matchPopWanted();
     if (motionWanted && beat.swell > 0) await sleep(beat.swell);
@@ -1622,8 +1922,11 @@ async function resolveCascade(firstMatch, comboStart){
     // tile that stopped reporting.
     await waitBurstEnd(clearedEls, beat.pop, motionWanted);
     const popEndedAt = performance.now();
-    // compute collapse plan and animate fall
-    const plan = computeCollapse(session.board, matched);
+    // compute collapse plan and animate fall. Gravity is screen-relative: the
+    // direction is chosen from the board's current turn so the fall keeps the same
+    // up/down on screen no matter which way the board is shown (see gravityForStep).
+    const plan = computeCollapse(session.board, clearing, Math.random, gravityForStep(session.rotStep));
+    if (heldKey) pinHeldCell(plan, session.board, heldKey);
     const fall = await animateCollapse(plan, clearedEls, beat.fall, motionWanted);
     lastCascadeRecord.push({ run: maxRun, popStartedAt, popEndedAt, ...fall });
     matched = findMatches(session.board);
@@ -1631,6 +1934,25 @@ async function resolveCascade(firstMatch, comboStart){
     if (session.mode==='solo') updateSoloHud(); else updateBattleHud();
   }
   await reshuffleIfStuck();
+  // The cascade has fully settled: a step that earned a turn turns the board one
+  // Hex side anticlockwise and it STAYS there (a later such match turns it another
+  // 60°; it never resets here). Gated exactly like the other juice effects --
+  // reduced motion or effects off leaves the board where it is.
+  if (turnEarned && matchPopWanted()){
+    const rotor = document.getElementById('board');
+    const stepped = MatchLogic.advanceRotationStep(session.rotStep);
+    session.rotStep = stepped;
+    // The sixth turn ends the cycle upright: data-rot '6' rests on -360deg, one
+    // full turn, so the board keeps turning anticlockwise the whole way round
+    // instead of crawling 300deg back to 0. It looks exactly like '0' already
+    // does, so once it lands it is settled back to '0' with the transition off
+    // -- no spin, and the next turn starts from upright again.
+    setBoardRotation(String(stepped === 0 ? 6 : stepped), true);
+    // Hold the move open until the turn lands, so the next swipe is read in the
+    // orientation the player actually sees rather than mid-turn.
+    await waitBoardTurnEnd(rotor);
+    if (rotor.dataset.rot === '6') setBoardRotation('0', false);
+  }
 }
 
 /* =========================================================
@@ -1726,25 +2048,52 @@ function waitFallEnd(fallingEls, fallMs, wanted){
   });
 }
 
+// Wait for the board to finish a turn before it is handed back to the player.
+// The 1s rotor transition runs on its own; while it plays the tiles sit between
+// sides, so a swipe read against the resting step would point the wrong way. A
+// transitionend on the board's transform ends the wait; a backstop just past the
+// longest turn keeps it from ever hanging on a transition that never reports.
+function waitBoardTurnEnd(el){
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      el.removeEventListener('transitionend', onEnd);
+      clearTimeout(backstop);
+      resolve();
+    };
+    const onEnd = (e) => { if (e.target === el && e.propertyName === 'transform') finish(); };
+    el.addEventListener('transitionend', onEnd);
+    const backstop = setTimeout(finish, 1100);
+  });
+}
+
 async function animateCollapse(plan, clearedEls = [], fallMs = 170, motionWanted = true){
   const newMap = {};
   const incoming = [];
   const fallingEls = [];
+  const [gq, gr] = plan.gravity || [0, 1];
   for (const item of plan){
-    if (item.fromR !== null){
-      const el = session.elMap[hexKey(item.q, item.fromR)];
+    const toKey = hexKey(item.to.q, item.to.r);
+    if (item.from){
+      const el = session.elMap[hexKey(item.from.q, item.from.r)];
       if (el){
-        newMap[hexKey(item.q, item.toR)] = el;
-        el.dataset.q = item.q; el.dataset.r = item.toR;
-        if (item.toR !== item.fromR) fallingEls.push(el);
+        newMap[toKey] = el;
+        el.dataset.q = item.to.q; el.dataset.r = item.to.r;
+        if (item.to.q !== item.from.q || item.to.r !== item.from.r) fallingEls.push(el);
       }
     } else {
       const keyId = 'k'+(tileKeySeq++);
-      const spawnR = QCOLUMNS_BY_Q[item.q].rMin - 1 - Math.random()*2;
-      const el = tileEl(item.type, item.q, spawnR, keyId);
+      // New tiles start a little past the line's upstream end, along the gravity
+      // direction, and fall in: on a turned board that side is the screen's own top,
+      // so refill stays screen-relative instead of following the board's turn.
+      const base = item.spawn || item.to;
+      const off = 1 + Math.random()*2;
+      const el = tileEl(item.type, base.q - gq*off, base.r - gr*off, keyId);
       el.classList.add('spawning');
       boardEl.appendChild(el);
-      newMap[hexKey(item.q, item.toR)] = el;
+      newMap[toKey] = el;
       incoming.push(el);
       fallingEls.push(el);
     }
@@ -1758,7 +2107,12 @@ async function animateCollapse(plan, clearedEls = [], fallMs = 170, motionWanted
   incoming.forEach(el=> el.style.opacity = '0');
   Object.keys(session.elMap).forEach(key=>{
     const [q,r] = key.split(',').map(Number);
-    positionHexTile(session.elMap[key], q, r);
+    const el = session.elMap[key];
+    // Every tile reports the cell it now stands on: a refilled tile is created
+    // at a fractional spawn height, so its data-q/data-r must be rewritten to
+    // the real cell here or a later swipe from it would be read at no cell.
+    el.dataset.q = q; el.dataset.r = r;
+    positionHexTile(el, q, r);
   });
   incoming.forEach(el=>{ el.style.opacity=''; el.classList.remove('spawning'); });
   // the tiles are back in their places and the fall is under way: that is the
@@ -1811,7 +2165,12 @@ document.getElementById('hint-btn').addEventListener('click', ()=>{
   const hint = findHint(session.board);
   clearHint();
   if (!hint){ showToast('No hint available — no swap can match'); return; }
-  [hint.a, hint.b].forEach(c=>{
+  // A turned board answers the hint with the single tile to swipe from: one
+  // glow stays unambiguous against the rotated grid, and the swap is read back
+  // through the turn by the same mapping the swipe itself uses. An upright
+  // board keeps its familiar two-tile hint.
+  const hinted = session.rotStep ? [hint.a] : [hint.a, hint.b];
+  hinted.forEach(c=>{
     const el = session.elMap[hexKey(c.q, c.r)];
     if (el) el.classList.add('hint');
   });
@@ -1857,9 +2216,9 @@ document.getElementById('power-btn').addEventListener('click', async ()=>{
       // type's artwork and colour too -- otherwise the two would disagree.
       allKeys.forEach(key=>{
         const type = session.board[key];
-        el[key].innerHTML = MonsterTiles.monsterTileSVG(type);
         el[key].dataset.type = type;
         delete el[key].dataset.special; // the reshaped tile carries no special
+        setTileContent(el[key], type, null); // repaint without the old mark
       });
       if (session.mode==='solo'){ session.movesLeft += 2; updateSoloHud(); }
       break;
@@ -2179,24 +2538,46 @@ async function boot(){
 boot();
 
 // ==== ML-JUICE: effects switch ====
-/* The game's one shared effects setting. It is kept exactly the way the
-   sound setting is: a plain localStorage flag read when the script runs,
-   so turning effects off survives closing and reopening the game, while
-   a brand-new player (no flag saved) starts with effects on. */
+/* The game's one shared effects setting. It is kept the way the sound setting is:
+   a plain localStorage flag read when the script runs, so the player's choice
+   survives closing and reopening the game. Until the player makes that choice, the
+   setting mirrors the OS "reduce motion" preference (off under reduce, on
+   otherwise); once they choose, their choice wins from then on. */
 const EFFECTS_KEY = 'ml_effects';
-let effectsOn = (function(){
-  try{ return localStorage.getItem(EFFECTS_KEY) !== 'off'; }
-  catch(e){ return true; /* storage unavailable: assume on */ }
-})();
+// The player's explicit choice, if they ever made one ('on'/'off'), or null when
+// they have never touched the switch. Until they choose, the switch mirrors the OS
+// "reduce motion" preference live; once they choose, their choice is the authority
+// -- so turning effects ON overrides reduced motion, and turning them OFF sticks.
+let effectsChoice = null;
+try{
+  const saved = localStorage.getItem(EFFECTS_KEY);
+  if (saved === 'on' || saved === 'off') effectsChoice = saved;
+}catch(e){ /* storage unavailable: no saved choice */ }
+const REDUCE_MOTION_MQ = (typeof window.matchMedia === 'function')
+  ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+let effectsOn = effectsChoice
+  ? effectsChoice === 'on'
+  : !(REDUCE_MOTION_MQ && REDUCE_MOTION_MQ.matches);
 
 // The current setting, and the switch that changes it.
 window.effectsEnabled = ()=> effectsOn;
 window.setEffectsEnabled = (on)=>{
   effectsOn = !!on;
-  try{ localStorage.setItem(EFFECTS_KEY, effectsOn ? 'on' : 'off'); }catch(e){ /* non-fatal */ }
+  effectsChoice = effectsOn ? 'on' : 'off'; // an explicit choice wins from now on
+  try{ localStorage.setItem(EFFECTS_KEY, effectsChoice); }catch(e){ /* non-fatal */ }
   updateEffectsToggle();
   return effectsOn;
 };
+// While the player has not chosen, follow the OS preference live, so a game with no
+// explicit setting honours a mid-session change to reduced motion. After a choice,
+// the switch is the authority and this does nothing.
+if (REDUCE_MOTION_MQ && typeof REDUCE_MOTION_MQ.addEventListener === 'function'){
+  REDUCE_MOTION_MQ.addEventListener('change', (e)=>{
+    if (effectsChoice) return;
+    effectsOn = !e.matches;
+    updateEffectsToggle();
+  });
+}
 
 // The button shows the setting itself: sparkle when on, moon when off, an
 // ON/OFF label, and aria-pressed so the state is announced as well as seen.
@@ -2234,13 +2615,12 @@ const MATCH_POP_CLASS = 'matchPop';
 const MATCH_POP_BACKSTOP_MS = 640;
 const matchPopTimers = new WeakMap();
 
-// Reduced motion wins. Otherwise the shared effects switch, when it is there.
+// The in-game Effects switch is the authority: on plays the effects (even when
+// the OS asks for reduced motion -- turning the switch on is the player's explicit
+// choice and it wins), off suppresses them. The OS reduced-motion preference only
+// decides the switch's starting value (see the effects switch block).
 function matchPopWanted(){
-  try{
-    if (typeof window.matchMedia === 'function'
-        && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
-  }catch(e){ /* no matchMedia to ask: keep the pop */ }
-  if (typeof window.effectsEnabled === 'function' && !window.effectsEnabled()) return false;
+  if (typeof window.effectsEnabled === 'function') return window.effectsEnabled();
   return true;
 }
 
@@ -2283,13 +2663,11 @@ function playClearPop(els, burstClass){
    switch is asked for defensively, because it may not be there at all. */
 const RESULTS_STATE_CLASSES = ['win', 'lose', 'no-burst'];
 
-// Reduced motion wins. Otherwise the shared effects switch, when there is one.
+// The shared effects switch is the authority: off blocks the burst (a player who
+// turned effects off, including the reduced-motion default, gets the plain screen);
+// on lets it play even when the OS asks for reduced motion.
 function burstBlocked(){
-  try{
-    if (typeof window.matchMedia === 'function'
-        && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
-  }catch(e){ /* no matchMedia to ask: let it burst */ }
-  if (typeof window.effectsEnabled === 'function' && !window.effectsEnabled()) return true;
+  if (typeof window.effectsEnabled === 'function') return !window.effectsEnabled();
   return false;
 }
 

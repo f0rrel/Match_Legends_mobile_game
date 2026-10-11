@@ -2,6 +2,21 @@
 
 Releases of this project, newest first. Written by the Master System from its task history.
 
+## Unreleased
+
+Not a release — work that exists on branches after v0.3.
+
+On `develop` (Hex), newest first:
+
+- ml-43: Give each special kind its own mark on the tile
+- ml-45: Combine two specials swapped together
+- ml-44: Give each special its own burst when it fires
+- ml-40: Plant the special the player earned on the board
+
+On `square-board` (Square), the `square/base` baseline: an 8 × 9 grid with SVG jewel
+tiles, directional line specials (`line-h` / `line-v`), named special combos
+(`cross`, `mega`, `kaboom`), cascade callouts and a power moment.
+
 ## v0.3 (2026-10-07)
 
 - ml-22: The match beat table in the game logic
