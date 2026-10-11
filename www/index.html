@@ -346,23 +346,18 @@
      tiles are out of step. It is set once, at creation, because re-timing a
      running animation would make the tile jump when gravity moves it.
 
-     Two gates:
-     reduced motion — the .tile rule exists only inside
-     prefers-reduced-motion: no-preference, so a player who asked for less
-     motion never gets an animation at all. The global rule further down only
-     shortens durations and would leave the animation named, so it is not
-     relied on here;
-     effects off — '.idle-off .tile' below, wearing a class that
-     updateEffectsToggle() puts on and takes off the body.
+     One gate: the shared effects switch — '.idle-off .tile' below, wearing a
+     class that updateEffectsToggle() puts on and takes off the body. The switch
+     starts off when the OS asks for reduced motion (see the effects switch block),
+     but a player who turns effects on gets the wobble even then: the switch is the
+     authority, not the media query.
 
      These rules sit above .tile.hint and .tile.matchPop on purpose: equal
      specificity, so the later rules win and hint and pop keep overriding the
      wobble exactly as they always took an animation over. */
-  @media (prefers-reduced-motion: no-preference){
-    .tile{
-      animation:idleWobble 2.6s ease-in-out infinite;
-      animation-delay:var(--wobble-delay, 0s);
-    }
+  .tile{
+    animation:idleWobble 2.6s ease-in-out infinite;
+    animation-delay:var(--wobble-delay, 0s);
   }
   .idle-off .tile{ animation:none; }
   @keyframes idleWobble{
@@ -618,9 +613,9 @@
      the screen is shown, and is over before anyone can read the score.
 
      The loss state has no rule here at all, so a loss looks exactly as it always
-     did. The two rules below are the only ways the burst is ever taken away again:
-     'no-burst', worn when the shared effects switch is off, and reduced motion —
-     both put there by the script at the bottom of this file. */
+     did. The one rule below is the only way the burst is ever taken away again:
+     'no-burst', worn when the shared effects switch is off (including the
+     reduced-motion default), put there by the script at the bottom of this file. */
   .results-screen{ position:relative; }
   .results-screen::before{
     content:''; position:absolute; inset:-18%; z-index:-1; border-radius:50%;
@@ -639,15 +634,16 @@
     35%{ opacity:.85; }
     100%{ opacity:0; }
   }
-  /* No burst on a loss, and none when the state class is worn with 'no-burst'. */
+  /* No burst on a loss, and none when the effects switch is off ('no-burst' is set
+     by the script; body.idle-off covers a burst read straight off the CSS while
+     effects are off, including the reduced-motion default). Turning effects on
+     plays it even under reduced motion: the switch is the authority. */
+  body.idle-off .results-screen.win,
+  body.idle-off .results-screen.win::before,
   .results-screen.lose,
   .results-screen.lose::before,
   .results-screen.no-burst,
   .results-screen.no-burst::before{ animation:none; }
-  @media (prefers-reduced-motion: reduce){
-    .results-screen.win,
-    .results-screen.win::before{ animation:none; }
-  }
 
   .btn{
     padding:14px; border-radius:12px; font-weight:800; font-family:'Cinzel',serif; font-size:14.5px; text-align:center;
@@ -663,8 +659,12 @@
   }
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 
+  /* The one place the OS reduced-motion preference still bites: while the shared
+     effects switch is OFF ('.idle-off' on the body, which is its default value
+     under reduced motion), collapse whatever is left of the motion to a snap. Once
+     the player turns effects ON the switch wins and everything runs at full speed. */
   @media (prefers-reduced-motion: reduce){
-    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+    body.idle-off *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
   }
 
   .score-pop{
@@ -2530,24 +2530,46 @@ async function boot(){
 boot();
 
 // ==== ML-JUICE: effects switch ====
-/* The game's one shared effects setting. It is kept exactly the way the
-   sound setting is: a plain localStorage flag read when the script runs,
-   so turning effects off survives closing and reopening the game, while
-   a brand-new player (no flag saved) starts with effects on. */
+/* The game's one shared effects setting. It is kept the way the sound setting is:
+   a plain localStorage flag read when the script runs, so the player's choice
+   survives closing and reopening the game. Until the player makes that choice, the
+   setting mirrors the OS "reduce motion" preference (off under reduce, on
+   otherwise); once they choose, their choice wins from then on. */
 const EFFECTS_KEY = 'ml_effects';
-let effectsOn = (function(){
-  try{ return localStorage.getItem(EFFECTS_KEY) !== 'off'; }
-  catch(e){ return true; /* storage unavailable: assume on */ }
-})();
+// The player's explicit choice, if they ever made one ('on'/'off'), or null when
+// they have never touched the switch. Until they choose, the switch mirrors the OS
+// "reduce motion" preference live; once they choose, their choice is the authority
+// -- so turning effects ON overrides reduced motion, and turning them OFF sticks.
+let effectsChoice = null;
+try{
+  const saved = localStorage.getItem(EFFECTS_KEY);
+  if (saved === 'on' || saved === 'off') effectsChoice = saved;
+}catch(e){ /* storage unavailable: no saved choice */ }
+const REDUCE_MOTION_MQ = (typeof window.matchMedia === 'function')
+  ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+let effectsOn = effectsChoice
+  ? effectsChoice === 'on'
+  : !(REDUCE_MOTION_MQ && REDUCE_MOTION_MQ.matches);
 
 // The current setting, and the switch that changes it.
 window.effectsEnabled = ()=> effectsOn;
 window.setEffectsEnabled = (on)=>{
   effectsOn = !!on;
-  try{ localStorage.setItem(EFFECTS_KEY, effectsOn ? 'on' : 'off'); }catch(e){ /* non-fatal */ }
+  effectsChoice = effectsOn ? 'on' : 'off'; // an explicit choice wins from now on
+  try{ localStorage.setItem(EFFECTS_KEY, effectsChoice); }catch(e){ /* non-fatal */ }
   updateEffectsToggle();
   return effectsOn;
 };
+// While the player has not chosen, follow the OS preference live, so a game with no
+// explicit setting honours a mid-session change to reduced motion. After a choice,
+// the switch is the authority and this does nothing.
+if (REDUCE_MOTION_MQ && typeof REDUCE_MOTION_MQ.addEventListener === 'function'){
+  REDUCE_MOTION_MQ.addEventListener('change', (e)=>{
+    if (effectsChoice) return;
+    effectsOn = !e.matches;
+    updateEffectsToggle();
+  });
+}
 
 // The button shows the setting itself: sparkle when on, moon when off, an
 // ON/OFF label, and aria-pressed so the state is announced as well as seen.
@@ -2585,13 +2607,12 @@ const MATCH_POP_CLASS = 'matchPop';
 const MATCH_POP_BACKSTOP_MS = 640;
 const matchPopTimers = new WeakMap();
 
-// Reduced motion wins. Otherwise the shared effects switch, when it is there.
+// The in-game Effects switch is the authority: on plays the effects (even when
+// the OS asks for reduced motion -- turning the switch on is the player's explicit
+// choice and it wins), off suppresses them. The OS reduced-motion preference only
+// decides the switch's starting value (see the effects switch block).
 function matchPopWanted(){
-  try{
-    if (typeof window.matchMedia === 'function'
-        && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
-  }catch(e){ /* no matchMedia to ask: keep the pop */ }
-  if (typeof window.effectsEnabled === 'function' && !window.effectsEnabled()) return false;
+  if (typeof window.effectsEnabled === 'function') return window.effectsEnabled();
   return true;
 }
 
@@ -2634,13 +2655,11 @@ function playClearPop(els, burstClass){
    switch is asked for defensively, because it may not be there at all. */
 const RESULTS_STATE_CLASSES = ['win', 'lose', 'no-burst'];
 
-// Reduced motion wins. Otherwise the shared effects switch, when there is one.
+// The shared effects switch is the authority: off blocks the burst (a player who
+// turned effects off, including the reduced-motion default, gets the plain screen);
+// on lets it play even when the OS asks for reduced motion.
 function burstBlocked(){
-  try{
-    if (typeof window.matchMedia === 'function'
-        && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
-  }catch(e){ /* no matchMedia to ask: let it burst */ }
-  if (typeof window.effectsEnabled === 'function' && !window.effectsEnabled()) return true;
+  if (typeof window.effectsEnabled === 'function') return !window.effectsEnabled();
   return false;
 }
 

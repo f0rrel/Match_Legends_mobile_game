@@ -51,6 +51,9 @@ test('each special kind bursts its own way, inside the beat', async ({ page }) =
   expect(new Set(bursts.map(b => b.name)).size).toBe(2);
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
+  // The effects switch mirrors the OS preference (it has no explicit choice here),
+  // so wait for it to react before reading the burst off the CSS.
+  await page.waitForFunction(() => !window.effectsEnabled());
   const calm = await burstOf(page, 'bomb');
   expect(ms(calm.dur)).toBeLessThan(50);
   expect(errors).toEqual([]);
