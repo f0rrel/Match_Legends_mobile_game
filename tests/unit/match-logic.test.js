@@ -108,14 +108,17 @@ test('collapse keeps survivors in order, drops them down, and fills from the top
   const plan = ML.computeCollapse(board, matched, rng);
 
   assert.equal(plan.length, 61);
-  const col = plan.filter(p => p.q === 0).sort((a, b) => a.toR - b.toR);
-  assert.deepEqual(col.slice(0, 2).map(p => p.fromR), [null, null]);
+  const col = plan.filter(p => p.to.q === 0).sort((a, b) => a.to.r - b.to.r);
+  assert.deepEqual(col.slice(0, 2).map(p => p.from), [null, null]);
   const survivors = before.filter((_, i) => ![4, 5].includes(i)); // r = 0, 1 removed
   assert.deepEqual(col.slice(2).map(p => p.type), survivors);
-  assert.deepEqual(col.slice(2).map(p => p.fromR), [-4, -3, -2, -1, 2, 3, 4]);
-  col.forEach(p => assert.equal(board[key(0, p.toR)], p.type));
-  // Untouched columns are unchanged.
-  plan.filter(p => p.q !== 0).forEach(p => assert.equal(p.fromR, p.toR));
+  assert.deepEqual(col.slice(2).map(p => p.from.r), [-4, -3, -2, -1, 2, 3, 4]);
+  col.forEach(p => assert.equal(board[key(p.to.q, p.to.r)], p.type));
+  // Untouched lines are unchanged: every tile stays on its own cell.
+  plan.filter(p => p.to.q !== 0).forEach(p => {
+    assert.equal(p.from.q, p.to.q);
+    assert.equal(p.from.r, p.to.r);
+  });
 });
 
 test('line powers clear one whole line of the requested axis', () => {

@@ -136,29 +136,73 @@
     do { board = createBoard(rng); guard++; } while (!hasPossibleMove(board) && guard < 30);
     return board;
   }
-  // Returns collapse plan: for each q-column, list of {q, fromR(or null if new), toR, type}.
-  // Gravity pulls toward larger r (down-screen); new tiles spawn at the column's rMin end.
-  function computeCollapse(board, matchedSet, rng = Math.random){
+  // Returns a collapse plan: one entry per board cell, {from, to, type}. `from` is
+  // the cell a surviving tile moves from (null for a brand-new tile) and `to` is
+  // the cell it lands on. `gravity` is one of the six hex directions [dq, dr]: tiles
+  // fall along it and new tiles arrive from the opposite (upstream) side, filling
+  // the gaps from there. The default [0, 1] (toward larger r) is the game's original
+  // down-screen pull; callers pass another direction when the board is turned so the
+  // fall can stay screen-relative.
+  function computeCollapse(board, matchedSet, rng = Math.random, gravity = [0, 1]){
+    const [gq, gr] = gravity;
+    // Every cell lies on one line parallel to gravity: the cells sharing the
+    // coordinate that stays constant along that direction. `lineKey` names the
+    // line; `order` sorts along it so index 0 is the upstream end new tiles come
+    // from and the last index is the downstream end survivors slide toward.
+    let lineKey, order;
+    if (gq === 0){      lineKey = c => c.q;        order = c => (gr > 0 ? c.r : -c.r); }
+    else if (gr === 0){ lineKey = c => c.r;        order = c => (gq > 0 ? c.q : -c.q); }
+    else {              lineKey = c => -c.q - c.r; order = c => (gq > 0 ? c.q : -c.q); }
+    const lines = new Map();
+    for (const c of HEX_CELLS){
+      const k = lineKey(c);
+      if (!lines.has(k)) lines.set(k, []);
+      lines.get(k).push(c);
+    }
     const plan = [];
-    QCOLUMNS.forEach(({q, rMin, rMax})=>{
-      const survivors = [];
-      for (let r=rMin; r<=rMax; r++){
-        const key = hexKey(q,r);
-        if (!matchedSet.has(key)) survivors.push({ fromR:r, type:board[key] });
+    plan.gravity = [gq, gr]; // so the caller can spawn new tiles from the right side
+    for (const line of lines.values()){
+      line.sort((a, b) => order(a) - order(b)); // upstream first
+      const up = line[0]; // the upstream end new tiles arrive past
+      const survivors = line.filter(c => !matchedSet.has(hexKey(c.q, c.r)));
+      const newCount = line.length - survivors.length;
+      const values = [];
+      for (let i=0;i<newCount;i++) values.push(randType(rng)); // new tiles at the top
+      survivors.forEach(c => values.push(board[hexKey(c.q, c.r)]));
+      for (let i=0;i<line.length;i++){
+        const to = line[i];
+        const from = i >= newCount ? survivors[i - newCount] : null;
+        plan.push({
+          from: from ? { q: from.q, r: from.r } : null,
+          to: { q: to.q, r: to.r },
+          type: values[i],
+          spawn: from ? undefined : { q: up.q, r: up.r }
+        });
+        board[hexKey(to.q, to.r)] = values[i];
       }
-      const total = rMax-rMin+1;
-      const newCount = total - survivors.length;
-      const newTiles = [];
-      for (let i=0;i<newCount;i++) newTiles.push({ fromR:null, type:randType(rng) });
-      const finalCol = newTiles.concat(survivors);
-      for (let i=0;i<total;i++){
-        const r = rMin+i;
-        const item = finalCol[i];
-        plan.push({ q, toR:r, fromR:item.fromR, type:item.type });
-        board[hexKey(q,r)] = item.type;
-      }
-    });
+    }
     return plan;
+  }
+
+  // The logical gravity direction to use at a given rotation step so the fall stays
+  // screen-relative: the board is drawn turned -60°*step (see the CSS), so the
+  // board frame's own "down" has swung with it; turning the logical direction by
+  // +60°*step compensates and keeps the on-screen fall direction the same at every
+  // step. Step 0 is the unturned board's own +r — exactly the pull the game always
+  // had — so the initial orientation is unchanged. `M(q,r) = (-r, q+r)` is one +60°
+  // turn of the hex lattice, applied step times to [0,1].
+  const GRAVITY_BY_STEP = (function(){
+    const out = [];
+    let q = 0, r = 1;
+    for (let i=0;i<6;i++){
+      out.push([q, r]);
+      const nq = -r, nr = q + r;
+      q = nq; r = nr;
+    }
+    return out; // [[0,1],[-1,1],[-1,0],[0,-1],[1,-1],[1,0]]
+  })();
+  function gravityForStep(step){
+    return GRAVITY_BY_STEP[normaliseRotationStep(step)];
   }
 
   /* =========================================================
@@ -225,7 +269,7 @@
     hexKey, buildHexCells, HEX_CELLS, QCOLUMNS, QCOLUMNS_BY_Q,
     HEX_LINE_GROUPS, HEX_ALL_LINES, HEX_DIRS, HEX_CHECK_DIRS,
     hexNeighbors, isHexAdjacent, swapHex,
-    randType, createBoard, findMatches, hasPossibleMove, createPlayableBoard, computeCollapse,
+    randType, createBoard, findMatches, hasPossibleMove, createPlayableBoard, computeCollapse, gravityForStep,
     lineTargets, areaTargets, typeTargets, convertTiles,
   };
 
