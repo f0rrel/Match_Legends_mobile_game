@@ -896,9 +896,6 @@ const AI_NAMES = [
 
 const BATTLE_TARGET = 4000;
 const BATTLE_SECONDS = 60;
-// Longest run in a settled cascade that earns the board a turn. 4 is the test
-// threshold for now; production is 5, so restoring it later is a one-line change.
-const ROTATION_TRIGGER_RUN = 4;
 
 /* =========================================================
    SOUND + HAPTICS (synthesized, no asset files needed)
@@ -1389,8 +1386,8 @@ async function loadSavedSession(){
 // ML-54: the board's orientation step lives on the session (0..5, 0 upright)
 // and is mirrored onto #board as data-rot, which is what the CSS turns by. A
 // level always starts and replays upright, and the step is never read from or
-// written to saved progress: only a settled run of ROTATION_TRIGGER_RUN ever
-// advances it.
+// written to saved progress: only a settled match that earned a line or bomb
+// special ever advances it.
 // data-rot is stepped with the transition switched off, so putting the board
 // upright again lands it there at once instead of unwinding the last side (or
 // a whole -360deg cycle) in front of the player. A forced reflow in between
@@ -1645,6 +1642,11 @@ async function attemptSwap(a, b){
     expanded.runLen = matched.runLen;
     expanded.burstClass = matched.burstClass;
   }
+  // Preserve the original match shape before special blasts expand the clear.
+  // Power-only clears must not earn rotation just because they hit 4+ cells.
+  expanded.rotationShape = matched.size > 0
+    ? MatchLogic.matchShape(matched)
+    : null;
   // Which special the player's own swap earned, read from the first match set
   // alone (the one findMatches() returned, before special blasts grow it), so a
   // power's clear and the later cascade steps can never name one. resolveCascade
@@ -1799,18 +1801,23 @@ async function resolveCascade(firstMatch, comboStart, heldKey){
   lastCascadeRecord = [];
   let matched = firstMatch;
   let combo = comboStart;
-  // ML-54: whether any clearing step of THIS cascade reached the turn trigger
-  // run (ROTATION_TRIGGER_RUN, a run of 4 at the test threshold). It only earns
-  // the board a 60° turn once the whole cascade has settled -- after the loop and
-  // reshuffleIfStuck() below -- never mid-cascade, and a plain 3-match leaves it
-  // false.
+  // ML-54: whether any clearing step of THIS cascade earned a turn. A step earns
+  // it when its own match shape is a line or a bomb -- a straight run of 4 or
+  // more in the original match, read before any special blast grows the clear.
+  // The grown clear of a power detonation carries no shape (rotationShape null),
+  // so a power alone never earns a turn. It only turns the board once the whole
+  // cascade has settled -- after the loop and reshuffleIfStuck() below -- never
+  // mid-cascade, and a plain 3-match leaves it false.
   let turnEarned = false;
   while (matched.size > 0){
     // score
     const av = selectedAvatar();
     let maxRun = 3;
     matched.forEach(key=>{ maxRun = Math.max(maxRun, (matched.runLen && matched.runLen[key]) || 3); });
-    if (maxRun >= ROTATION_TRIGGER_RUN) turnEarned = true;
+    const rotationShape = Object.prototype.hasOwnProperty.call(matched, 'rotationShape')
+      ? matched.rotationShape
+      : MatchLogic.matchShape(matched);
+    if (rotationShape === 'line' || rotationShape === 'bomb') turnEarned = true;
     // The beat this clearing step plays, straight from the logic's table: the
     // tiles swell, then pop, and only then may the board start falling.
     const beat = window.MatchLogic.matchBeat(maxRun);
@@ -1879,10 +1886,10 @@ async function resolveCascade(firstMatch, comboStart, heldKey){
     if (session.mode==='solo') updateSoloHud(); else updateBattleHud();
   }
   await reshuffleIfStuck();
-  // The cascade has fully settled: a run of ROTATION_TRIGGER_RUN that was part of
-  // it turns the board one Hex side anticlockwise and it STAYS there (a later such
-  // match turns it another 60°; it never resets here). Gated exactly like the other
-  // juice effects -- reduced motion or effects off leaves the board where it is.
+  // The cascade has fully settled: a step that earned a turn turns the board one
+  // Hex side anticlockwise and it STAYS there (a later such match turns it another
+  // 60°; it never resets here). Gated exactly like the other juice effects --
+  // reduced motion or effects off leaves the board where it is.
   if (turnEarned && matchPopWanted()){
     const rotor = document.getElementById('board');
     const stepped = MatchLogic.advanceRotationStep(session.rotStep);
