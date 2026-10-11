@@ -890,9 +890,9 @@ const TILE_ICONS = { sword:'⚔️', shield:'🛡️', urn:'🏺', crown:'👑',
 // Pure game logic (hex grid, matching, gravity, power targeting) lives in
 // www/js/match-logic.js so it can be unit tested.
 const {
-  BASE_POINTS, TYPES, hexKey, HEX_CELLS, QCOLUMNS_BY_Q,
+  BASE_POINTS, TYPES, hexKey, HEX_CELLS,
   isHexAdjacent, swapHex, createRng,
-  findMatches, hasPossibleMove, createPlayableBoard, computeCollapse, findHint, starsForScore,
+  findMatches, hasPossibleMove, createPlayableBoard, computeCollapse, gravityForStep, findHint, starsForScore,
 } = window.MatchLogic;
 
 const AVATARS = [
@@ -1821,22 +1821,22 @@ function plantPlayerSpecial(target){
 }
 
 // The held cell rides through the fall as a survivor, but computeCollapse()
-// packs a column down toward its bottom end: a survivor above a gap would slide
+// packs each line down toward its bottom end: a survivor above a gap would slide
 // one cell and leave the player's own cell to whatever fell in from above. The
 // plan is re-pointed so the held tile keeps its own cell and the tile that was
 // going to land there takes the held tile's place; the two board values the
 // plan just wrote are swapped to match.
 function pinHeldCell(plan, board, key){
   const [q, r] = key.split(',').map(Number);
-  const held = plan.find(p => p.q === q && p.fromR === r);
-  if (!held || held.toR === r) return;
-  const displaced = plan.find(p => p.q === q && p.toR === r && p !== held);
+  const held = plan.find(p => p.from && hexKey(p.from.q, p.from.r) === key);
+  if (!held || (held.to.q === q && held.to.r === r)) return;
+  const displaced = plan.find(p => p.to && hexKey(p.to.q, p.to.r) === key && p !== held);
   if (!displaced) return;
-  const landing = held.toR;
-  held.toR = r;
-  displaced.toR = landing;
+  const landing = { q: held.to.q, r: held.to.r };
+  held.to = { q, r };
+  displaced.to = landing;
   const heldKey = hexKey(q, r);
-  const otherKey = hexKey(q, landing);
+  const otherKey = hexKey(landing.q, landing.r);
   const tmp = board[heldKey];
   board[heldKey] = board[otherKey];
   board[otherKey] = tmp;
@@ -1922,8 +1922,10 @@ async function resolveCascade(firstMatch, comboStart, heldKey){
     // tile that stopped reporting.
     await waitBurstEnd(clearedEls, beat.pop, motionWanted);
     const popEndedAt = performance.now();
-    // compute collapse plan and animate fall
-    const plan = computeCollapse(session.board, clearing);
+    // compute collapse plan and animate fall. Gravity is screen-relative: the
+    // direction is chosen from the board's current turn so the fall keeps the same
+    // up/down on screen no matter which way the board is shown (see gravityForStep).
+    const plan = computeCollapse(session.board, clearing, Math.random, gravityForStep(session.rotStep));
     if (heldKey) pinHeldCell(plan, session.board, heldKey);
     const fall = await animateCollapse(plan, clearedEls, beat.fall, motionWanted);
     lastCascadeRecord.push({ run: maxRun, popStartedAt, popEndedAt, ...fall });
@@ -2071,21 +2073,27 @@ async function animateCollapse(plan, clearedEls = [], fallMs = 170, motionWanted
   const newMap = {};
   const incoming = [];
   const fallingEls = [];
+  const [gq, gr] = plan.gravity || [0, 1];
   for (const item of plan){
-    if (item.fromR !== null){
-      const el = session.elMap[hexKey(item.q, item.fromR)];
+    const toKey = hexKey(item.to.q, item.to.r);
+    if (item.from){
+      const el = session.elMap[hexKey(item.from.q, item.from.r)];
       if (el){
-        newMap[hexKey(item.q, item.toR)] = el;
-        el.dataset.q = item.q; el.dataset.r = item.toR;
-        if (item.toR !== item.fromR) fallingEls.push(el);
+        newMap[toKey] = el;
+        el.dataset.q = item.to.q; el.dataset.r = item.to.r;
+        if (item.to.q !== item.from.q || item.to.r !== item.from.r) fallingEls.push(el);
       }
     } else {
       const keyId = 'k'+(tileKeySeq++);
-      const spawnR = QCOLUMNS_BY_Q[item.q].rMin - 1 - Math.random()*2;
-      const el = tileEl(item.type, item.q, spawnR, keyId);
+      // New tiles start a little past the line's upstream end, along the gravity
+      // direction, and fall in: on a turned board that side is the screen's own top,
+      // so refill stays screen-relative instead of following the board's turn.
+      const base = item.spawn || item.to;
+      const off = 1 + Math.random()*2;
+      const el = tileEl(item.type, base.q - gq*off, base.r - gr*off, keyId);
       el.classList.add('spawning');
       boardEl.appendChild(el);
-      newMap[hexKey(item.q, item.toR)] = el;
+      newMap[toKey] = el;
       incoming.push(el);
       fallingEls.push(el);
     }
