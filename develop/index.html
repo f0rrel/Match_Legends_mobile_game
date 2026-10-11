@@ -276,9 +276,32 @@
     touch-action:none;
     user-select:none;
   }
+  /* ==== upright tile faces ====
+     The board turns as one object, so a tile's own artwork would turn with it.
+     The face wraps the monster svg and the special mark and counter-rotates by
+     the board's angle, read straight from the same --board-rot custom property
+     #board turns by: the board rests on rotate(-60deg) while the face rests on
+     rotate(+60deg), so the two cancel and the artwork, symbol and mark stay
+     upright on screen. It is a plain layer over the tile -- inset:0, so it never
+     nudges the tile's hex position or the script's `translate` -- and it inherits
+     --board-rot from #board, so no separate counter is kept and the two can
+     never drift. It shares the board's 1s ease, so the counter-turn runs in
+     step with the turn; the global reduced-motion rule collapses both to a snap. */
+  .tile-face{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    transform:rotate(calc(-1 * var(--board-rot, 0deg)));
+    transform-origin:50% 50%;
+    transition:transform 1s cubic-bezier(.45,.05,.35,1);
+    will-change:transform;
+  }
+  /* Settling the sixth turn home (setBoardRotation(..., false)) snaps the board
+     with its transition off; the face must snap with it, or the settled
+     -360deg would unwind as a visible extra spin of the artwork. */
+  #board.rot-snap .tile-face{ transition:none; }
   /* The monster artwork fills its hexagon and is drawn over the hex background,
      inheriting the tile's own colour through currentColor. */
-  .tile > svg{
+  .tile-face > svg{
     width:100%; height:100%; display:block;
     position:relative; z-index:1;
     pointer-events:none;
@@ -298,14 +321,14 @@
     z-index:2;
   }
   /* Line: a bright gold elongated bar, tilted so it reads as a streak. */
-  .tile[data-special="line"] > .special-mark{
+  .tile[data-special="line"] > .tile-face > .special-mark{
     background:linear-gradient(145deg, #FFF3B0 0%, #E7B84B 52%, #A9781A 100%);
     border:2px solid #2E2200;
     box-shadow:0 0 7px 2px rgba(231,184,75,0.95);
     transform:rotate(-28deg) scaleY(1.5);
   }
   /* Bomb: a round crimson flash, no tilt, so the two never look alike. */
-  .tile[data-special="bomb"] > .special-mark{
+  .tile[data-special="bomb"] > .tile-face > .special-mark{
     background:radial-gradient(circle at 40% 36%, #FFD6D6 0%, #E23B3B 46%, #8E1212 100%);
     border:2px solid #FFFFFF;
     box-shadow:0 0 8px 2px rgba(226,59,59,0.95);
@@ -1160,13 +1183,18 @@ function idleWobbleDelay(q, r){
 // The one place a tile's contents are painted: the monster svg, plus the
 // special mark when the tile carries a special. The mark is a sibling element,
 // never part of the artwork, so the monster still draws exactly its own paths.
+// Both live inside the tile-face layer, which counter-rotates against the board
+// so the artwork and mark stay upright while the board turns.
 function setTileContent(el, type, special){
-  el.innerHTML = MonsterTiles.monsterTileSVG(type);
+  const face = document.createElement('div');
+  face.className = 'tile-face';
+  face.innerHTML = MonsterTiles.monsterTileSVG(type);
   if (special){
     const mark = document.createElement('div');
     mark.className = 'special-mark';
-    el.appendChild(mark);
+    face.appendChild(mark);
   }
+  el.replaceChildren(face);
 }
 function tileEl(type, q, r, key){
   const d = document.createElement('div');
@@ -1398,8 +1426,13 @@ function setBoardRotation(rot, animate){
   if (!animate){
     const held = rotor.style.transition;
     rotor.style.transition = 'none';
+    // The tile faces carry their own transition, so snap them too: with
+    // rot-snap on, a settled -360deg face lands on 0deg at once instead of
+    // unwinding a whole extra turn of the artwork.
+    rotor.classList.add('rot-snap');
     rotor.dataset.rot = rot;
     void rotor.offsetWidth;
+    rotor.classList.remove('rot-snap');
     rotor.style.transition = held;
     return;
   }
